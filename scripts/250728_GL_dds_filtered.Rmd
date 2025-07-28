@@ -1,0 +1,247 @@
+---
+title: "250728_GL"
+author: "Irika Sinha"
+date: "2025-07-25"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Purpose
+
+The purpose of this script is to combine dds objects for different tissues
+
+## Packages
+
+```{r packages}
+CRANpackages <- c("tidyverse", "ggplot2", "ggpubr", 
+                  "ggstats","BiocManager","viridis",
+                  "gghighlight", "ggrepel","pheatmap","readxl")
+biocPackages <- c("apeglm", "DESeq2","limma", "biomaRt","fgsea")
+
+for(i in CRANpackages){
+  if(!(i %in% rownames(installed.packages()))){
+    install.packages(pkgs = i)
+  }
+  library(package = i, character.only = T, quietly = T)
+  rm(i)
+}
+
+for(i in biocPackages){
+  if(!(i %in% rownames(installed.packages()))){
+    BiocManager::install(pkgs = i, ask = F)
+  }
+  library(package = i, character.only = T, quietly = T)
+  rm(i)
+}
+
+rm(CRANpackages,biocPackages)
+
+```
+
+
+# Differential gene expression analysis
+Used DESeq2 vignette to write analysis script: https://www.bioconductor.org/packages/devel/bioc/vignettes/DESeq2/inst/doc/DESeq2.html
+Note: Log fold change shrinkage for visualization and ranking: "apeglm is the adaptive t prior shrinkage estimator from the apeglm package (Zhu, Ibrahim, and Love 2018). As of version 1.28.0, it is the default estimator."
+
+
+```{r wtDEG, eval=FALSE}
+setwd("/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/")
+dds <- readRDS("data/dds_merged.RDS")
+
+# Remove sample outlier (VNS_G91CX)
+dds <- dds[,-16]
+
+## DESeq2 Analysis: All conditions
+# Create dataframe with logFC and p.adj values for each gene. Add empty cols for CE type, CE name, TDPCE (1-PSI)
+dds_ctrlComp <- DESeq(dds)
+
+dds_LPSComp <- dds
+dds_LPSComp$treatment <- relevel(dds_LPSComp$treatment, ref = "LPS")
+dds_LPSComp <- DESeq(dds_LPSComp)
+
+## DEG results - ctrl comparison
+res_lps_ctrl <- lfcShrink(dds_ctrlComp, coef="treatment_LPS_vs_CTRL", type="apeglm") %>% as.data.frame()
+res_vns_ctrl <- lfcShrink(dds_ctrlComp, coef="treatment_VNS_vs_CTRL", type="apeglm") %>% as.data.frame()
+res_vns_lps <- lfcShrink(dds_LPSComp, coef="treatment_VNS_vs_LPS", type="apeglm") %>% as.data.frame()
+
+
+## Use Ensembl database to download gene ENMUS gene names to gene names + subset to protein-coding genes
+# ensembl <- useEnsembl(biomart = "ensembl")
+# searchDatasets(mart = ensembl, pattern = "rat")
+ensembl <- useEnsembl(biomart = "genes", dataset = "rnorvegicus_gene_ensembl")
+mart <- useDataset("rnorvegicus_gene_ensembl", useMart("ensembl"))
+
+gene_names <-getBM(filters= "ensembl_gene_id", 
+                   attributes= c("ensembl_gene_id","external_gene_name","gene_biotype"),
+                   values=rownames(res_lps_ctrl), mart= mart) 
+
+res_lps_ctrl_df <- res_lps_ctrl %>% rownames_to_column("ensembl_gene_id") %>%
+  inner_join(gene_names %>% filter(gene_biotype == "protein_coding") %>% 
+               dplyr::select(!c("gene_biotype")),
+             by = "ensembl_gene_id") %>%
+  relocate(external_gene_name, .before = "ensembl_gene_id") %>%
+  mutate(external_gene_name = ifelse(external_gene_name == "", ensembl_gene_id, external_gene_name))
+
+res_vns_ctrl_df <- res_vns_ctrl %>% rownames_to_column("ensembl_gene_id") %>%
+  inner_join(gene_names %>% filter(gene_biotype == "protein_coding") %>% 
+               dplyr::select(!c("gene_biotype")),
+             by = "ensembl_gene_id") %>%
+  relocate(external_gene_name, .before = "ensembl_gene_id") %>%
+  mutate(external_gene_name = ifelse(external_gene_name == "", ensembl_gene_id, external_gene_name))
+
+res_vns_lps_df <- res_vns_lps %>% rownames_to_column("ensembl_gene_id") %>%
+  inner_join(gene_names %>% filter(gene_biotype == "protein_coding") %>% 
+               dplyr::select(!c("gene_biotype")),
+             by = "ensembl_gene_id") %>%
+  relocate(external_gene_name, .before = "ensembl_gene_id") %>%
+  mutate(external_gene_name = ifelse(external_gene_name == "", ensembl_gene_id, external_gene_name))
+
+# write.csv(res_lps_ctrl_df, "/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/output/res_lps_ctrl_filter_df.csv")
+# write.csv(res_vns_lps_df, "/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/output/res_vns_lps_filter_df.csv")
+#  write.csv(res_vns_ctrl_df, "/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/output/res_vns_ctrl_filter_df.csv")
+
+```
+
+```{r plotAllTissue}
+res_lps_ctrl_df <- read.csv("/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/output/res_lps_ctrl_filter_df.csv")[,-1] 
+res_vns_ctrl_df <- read.csv("/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/output/res_vns_ctrl_filter_df.csv")[,-1] 
+res_vns_lps_df <- read.csv("/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/output/res_vns_lps_filter_df.csv")[,-1] 
+
+
+# Plot LPS
+df_plot <- res_lps_ctrl_df %>% 
+  filter(abs(log2FoldChange) > 1,padj < 0.05) %>%
+  dplyr::select(c(external_gene_name,log2FoldChange,padj)) %>% 
+  filter((str_detect(external_gene_name,"ENSRNOG|LOC",negate = T))) %>%
+  arrange(log2FoldChange) %>% dplyr::slice(c(1:14, (n()-15):n()))%>%
+  mutate(logp = -log10(padj), 
+         logp = ifelse(logp > 10, 10, logp),
+         external_gene_name = factor(external_gene_name, 
+                                     levels = external_gene_name)) 
+
+ggplot(df_plot, aes(x=external_gene_name, y = log2FoldChange, fill = logp)) +
+  geom_col() + ylim(-3.5,6) +theme_classic()+
+  xlab("LPS vs Ctrl DEGs")+ylab("log2FC") + 
+  theme(text =  element_text(color = "black"))+
+  coord_flip()+scale_fill_viridis_c(limits = c(0, 10),option="A")
+
+# Add VNS
+mergeOrder = df_plot$external_gene_name
+df_plot_merge <- df_plot %>% 
+  dplyr::select(c(external_gene_name,log2FoldChange,logp)) %>%
+  left_join(res_vns_ctrl_df %>%  mutate(logp = -log10(padj)) %>%
+              dplyr::select(c(external_gene_name,log2FoldChange,logp)),
+            by = "external_gene_name") %>%
+  pivot_longer(cols = c(2,4),names_to = "condition", values_to = "log2FC") %>%
+  mutate(condition = ifelse(condition == "log2FoldChange.x", "LPS", "VNS"),
+         log2FC = ifelse(log2FC > 5, 5, ifelse(log2FC < -5, -5, log2FC)),
+         external_gene_name= factor(external_gene_name, mergeOrder)) %>%
+  mutate(padj = paste0(logp.x,"_", logp.y),
+         padj = ifelse(condition == "LPS", 
+                       str_split_i(padj, pattern = "_", i = 1),
+                       str_split_i(padj, pattern = "_", i = 2)),
+         pLabel = ifelse(padj > 1.3, "*", ""),
+         labelC = ifelse(log2FC > 0, "black", "white"))
+  
+
+ggplot(df_plot_merge, aes(x=external_gene_name, y = condition, fill = log2FC)) +
+  geom_tile(color = "white") +theme_classic()+
+  xlab("LPS vs Ctrl DEGs")+ylab("condition") + 
+  theme(text =  element_text(color = "black"),
+        axis.line = element_blank(), 
+        axis.ticks = element_blank())+
+  scale_y_discrete(expand = c(0,0))+
+  geom_text(aes(label = pLabel), color = df_plot_merge$labelC, size = 4)+
+  coord_flip()+scale_fill_viridis_c(limits = c(-5, 5),option="A")
+
+```
+
+## Extract brain only
+```{r brainDDS, eval=F}
+setwd("/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL")
+
+## DESeq2 Analysis: All conditions
+# Create dataframe with logFC and p.adj values for each gene. Add empty cols for CE type, CE name, TDPCE (1-PSI)
+
+# Load data
+load("data/cortex_deseq2.dds.RData")
+cortex <- dds
+load("data/HIP_deseq2.dds.RData")
+hip <- dds
+load("data/spleen_deseq2.dds.RData")
+spleen <- dds
+
+# extract cortex data
+cortex_cdata = data.frame(cortex@colData)[,c(1:2)] %>% mutate(tissue = "cortex") %>%
+  filter(sample != "VNS_G91CX")
+cortex_counts = data.frame(counts(cortex)) %>% rownames_to_column("gene") %>%
+  dplyr::select(-VNS_G91CX)
+
+# extract hip data
+hip_cdata = data.frame(hip@colData)[,c(1:2)] %>% mutate(tissue = "hippocampus")
+hip_counts = data.frame(counts(hip)) %>% rownames_to_column("gene")
+
+# Merge colData
+cData <- rbind(cortex_cdata,hip_cdata)
+colnames(cData)[2] = "treatment"
+
+# Merge counts
+counts = as.matrix((full_join(cortex_counts, hip_counts, by = "gene")) %>%
+  column_to_rownames("gene"))
+
+# Create new dds
+dds_brain <- DESeqDataSetFromMatrix(countData = counts,
+                              colData = cData,
+                              design= ~ tissue + treatment)
+dds_brain$treatment <- relevel(dds_brain$treatment, ref = "CTRL")
+
+# saveRDS(dds_brain,"/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/data/dds__brain_filtered_merged.RDS")
+```
+
+```{r VisBrain}
+dds_brain <- readRDS("/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/data/dds__brain_filtered_merged.RDS") 
+
+# DESeq2
+dds_brain$treatment <- relevel(dds_brain$treatment, ref = "LPS")
+dds_brain <- DESeq(dds_brain)
+dds_brain@colData$treatTiss = paste0(dds_brain@colData$treatment,
+                                     "_",dds_brain@colData$tissue)
+dds_brain$treatTiss <- factor(dds_brain$treatTiss, 
+                              levels = unique(dds_brain$treatTiss))
+
+## DEG results - ctrl comparison
+res_vns_lps_brain <- lfcShrink(dds_brain, 
+                                coef="treatment_VNS_vs_LPS", 
+                                type="apeglm") %>% as.data.frame()
+
+
+## Use Ensembl database to download gene ENMUS gene names to gene names + subset to protein-coding genes
+# ensembl <- useEnsembl(biomart = "ensembl")
+# searchDatasets(mart = ensembl, pattern = "rat")
+ensembl <- useEnsembl(biomart = "genes", dataset = "rnorvegicus_gene_ensembl")
+mart <- useDataset("rnorvegicus_gene_ensembl", useMart("ensembl"))
+
+gene_names <-getBM(filters= "ensembl_gene_id", 
+                   attributes= c("ensembl_gene_id","external_gene_name","gene_biotype"),
+                   values=rownames(res_vns_lps_brain), mart= mart) 
+
+res_vns_lps_brain <- res_vns_lps_brain %>% rownames_to_column("ensembl_gene_id") %>%
+  inner_join(gene_names %>% filter(gene_biotype == "protein_coding") %>% 
+               dplyr::select(!c("gene_biotype")),
+             by = "ensembl_gene_id") %>%
+  relocate(external_gene_name, .before = "ensembl_gene_id") %>%
+  mutate(external_gene_name = ifelse(external_gene_name == "", ensembl_gene_id, external_gene_name))
+
+res_vns_lps_brain %>% dplyr::select(external_gene_name, baseMean, log2FoldChange, padj) %>% arrange(padj) %>% 
+  slice_head(n=10)
+
+# write.csv(res_vns_lps_brain, "/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/output/res_vns_lps_brain_df.csv")
+
+```
+
+
+
+
