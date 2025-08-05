@@ -48,11 +48,15 @@ Note: Log fold change shrinkage for visualization and ranking: "apeglm is the ad
 
 
 ```{r wtDEG, eval=FALSE}
-setwd("/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/")
+setwd("/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/2025_GL_RatSeq/")
 dds <- readRDS("data/dds_merged.RDS")
 
 # Remove sample outlier (VNS_G91CX)
 dds <- dds[,-16]
+
+# Filter out low expression genes
+keep <- rowSums(counts(dds)) >= 10
+dds <- dds[keep,]
 
 ## DESeq2 Analysis: All conditions
 # Create dataframe with logFC and p.adj values for each gene. Add empty cols for CE type, CE name, TDPCE (1-PSI)
@@ -99,16 +103,16 @@ res_vns_lps_df <- res_vns_lps %>% rownames_to_column("ensembl_gene_id") %>%
   relocate(external_gene_name, .before = "ensembl_gene_id") %>%
   mutate(external_gene_name = ifelse(external_gene_name == "", ensembl_gene_id, external_gene_name))
 
-# write.csv(res_lps_ctrl_df, "/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/output/res_lps_ctrl_filter_df.csv")
-# write.csv(res_vns_lps_df, "/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/output/res_vns_lps_filter_df.csv")
-#  write.csv(res_vns_ctrl_df, "/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/output/res_vns_ctrl_filter_df.csv")
+# write.csv(res_lps_ctrl_df, "/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/2025_GL_RatSeq/output/res_lps_ctrl_filter_df.csv")
+# write.csv(res_vns_lps_df, "/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/2025_GL_RatSeq/output/res_vns_lps_filter_df.csv")
+# write.csv(res_vns_ctrl_df, "/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/2025_GL_RatSeq/output/res_vns_ctrl_filter_df.csv")
 
 ```
 
 ```{r plotAllTissue}
-res_lps_ctrl_df <- read.csv("/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/output/res_lps_ctrl_filter_df.csv")[,-1] 
-res_vns_ctrl_df <- read.csv("/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/output/res_vns_ctrl_filter_df.csv")[,-1] 
-res_vns_lps_df <- read.csv("/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/output/res_vns_lps_filter_df.csv")[,-1] 
+res_lps_ctrl_df <- read.csv("/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/2025_GL_RatSeq/output/res_lps_ctrl_filter_df.csv")[,-1] 
+res_vns_ctrl_df <- read.csv("/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/2025_GL_RatSeq/output/res_vns_ctrl_filter_df.csv")[,-1] 
+res_vns_lps_df <- read.csv("/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/2025_GL_RatSeq/output/res_vns_lps_filter_df.csv")[,-1] 
 
 
 # Plot LPS
@@ -161,7 +165,7 @@ ggplot(df_plot_merge, aes(x=external_gene_name, y = condition, fill = log2FC)) +
 
 ## Extract brain only
 ```{r brainDDS, eval=F}
-setwd("/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL")
+setwd("/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/2025_GL_RatSeq/")
 
 ## DESeq2 Analysis: All conditions
 # Create dataframe with logFC and p.adj values for each gene. Add empty cols for CE type, CE name, TDPCE (1-PSI)
@@ -198,11 +202,11 @@ dds_brain <- DESeqDataSetFromMatrix(countData = counts,
                               design= ~ tissue + treatment)
 dds_brain$treatment <- relevel(dds_brain$treatment, ref = "CTRL")
 
-# saveRDS(dds_brain,"/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/data/dds__brain_filtered_merged.RDS")
+ # saveRDS(dds_brain,"/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/2025_GL_RatSeq/data/dds__brain_filtered_merged.RDS")
 ```
 
 ```{r VisBrain}
-dds_brain <- readRDS("/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/data/dds__brain_filtered_merged.RDS") 
+dds_brain <- readRDS("/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/2025_GL_RatSeq/data/dds__brain_filtered_merged.RDS") 
 
 # DESeq2
 dds_brain$treatment <- relevel(dds_brain$treatment, ref = "LPS")
@@ -242,6 +246,145 @@ res_vns_lps_brain %>% dplyr::select(external_gene_name, baseMean, log2FoldChange
 
 ```
 
+## LPS vs Ctrl (spleen and brain)
+```{r LPStissue}
+setwd("/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/2025_GL_RatSeq/")
+dds <- readRDS("data/dds_merged.RDS")
+
+# Remove sample outlier (VNS_G91CX)
+dds <- dds[,-16]
+
+# Filter out low expression genes
+keep <- rowSums(counts(dds)) >= 10
+dds <- dds[keep,]
+
+# clean up sample ID
+sampleIDs <- dds@colData$sample
+sampleIDs <- str_split_i(sampleIDs, "_", 2)
+sampleIDs <- gsub("[A-Z]","",sampleIDs)
+dds@colData$sampID = sampleIDs
+dds$sampID <- factor(dds$sampID, levels = unique(dds$sampID))
+
+# Add nervous tissue subset
+tissues = dds@colData$tissue
+tissues = gsub("cortex|hippocampus","CNS",tissues)
+tissues = gsub("spleen","PNS",tissues)
+dds@colData$tissue = tissues
+
+# Add coldata on condition
+dds@colData$condition = paste0(dds@colData$treatment,"_", dds@colData$tissue)
+dds$condition <- factor(dds$condition, levels = unique(dds$condition))
+dds$condition <- relevel(dds$condition, ref = "CTRL_PNS")
+
+# Add design
+design(dds) <- formula(~ condition)
+# saveRDS(dds, "/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/2025_GL_RatSeq/dds_annotated.RDS")
+
+## DESeq2 Analysis: PNS
+dds_ctrlPNS <- DESeq(dds)
+dds_ctrlPNS <- lfcShrink(dds_ctrlPNS, coef="condition_LPS_PNS_vs_CTRL_PNS",  type="apeglm") %>% as.data.frame()
+
+## DESeq2 Analysis: CNS
+dds$condition <- relevel(dds$condition, ref = "CTRL_CNS")
+dds_ctrlCNS <- DESeq(dds)
+dds_ctrlCNS <- lfcShrink(dds_ctrlCNS, coef="condition_LPS_CNS_vs_CTRL_CNS",  type="apeglm") %>% as.data.frame()
+
+# Add gene names
+dds_ctrlPNS <- dds_ctrlPNS %>% rownames_to_column("ensembl_gene_id") %>%
+  inner_join(gene_names %>% filter(gene_biotype == "protein_coding") %>% 
+               dplyr::select(!c("gene_biotype")),
+             by = "ensembl_gene_id") %>%
+  relocate(external_gene_name, .before = "ensembl_gene_id") %>%
+  mutate(external_gene_name = ifelse(external_gene_name == "", ensembl_gene_id, external_gene_name))
+
+dds_ctrlCNS <- dds_ctrlCNS %>% rownames_to_column("ensembl_gene_id") %>%
+  inner_join(gene_names %>% filter(gene_biotype == "protein_coding") %>% 
+               dplyr::select(!c("gene_biotype")),
+             by = "ensembl_gene_id") %>%
+  relocate(external_gene_name, .before = "ensembl_gene_id") %>%
+  mutate(external_gene_name = ifelse(external_gene_name == "", ensembl_gene_id, external_gene_name))
+
+# write.csv(dds_ctrlPNS, "/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/2025_GL_RatSeq/output/dds_ctrlPNS_ref_df.csv")
+# write.csv(dds_ctrlCNS, "/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/2025_GL_RatSeq/output/dds_ctrlCNS_ref_df.csv")
+
+## Top genes PNS
+df_plot <- dds_ctrlPNS %>% 
+  filter(abs(log2FoldChange) > 1,padj < 0.05) %>%
+  dplyr::select(c(external_gene_name,log2FoldChange,padj)) %>% 
+  filter((str_detect(external_gene_name,"ENSRNOG|LOC",negate = T))) %>%
+  arrange(log2FoldChange) %>% dplyr::slice(c(1:14, (n()-15):n()))%>%
+  mutate(logp = -log10(padj), 
+         logp = ifelse(logp > 10, 10, logp),
+         external_gene_name = factor(external_gene_name, 
+                                     levels = external_gene_name)) 
+# Add CNS values
+mergeOrder = df_plot$external_gene_name
+df_plot_merge <- df_plot %>% 
+  dplyr::select(c(external_gene_name,log2FoldChange,logp)) %>%
+  left_join(dds_ctrlCNS %>%  mutate(logp = -log10(padj)) %>%
+              dplyr::select(c(external_gene_name,log2FoldChange,logp)),
+            by = "external_gene_name") %>%
+  pivot_longer(cols = c(2,4),names_to = "condition", values_to = "log2FC") %>%
+  mutate(condition = ifelse(condition == "log2FoldChange.x", "PNS", "CNS"),
+         log2FC = ifelse(log2FC > 5, 5, ifelse(log2FC < -5, -5, log2FC)),
+         external_gene_name= factor(external_gene_name, mergeOrder)) %>%
+  mutate(padj = paste0(logp.x,"_", logp.y),
+         padj = ifelse(condition == "PNS", 
+                       str_split_i(padj, pattern = "_", i = 1),
+                       str_split_i(padj, pattern = "_", i = 2)),
+         pLabel = ifelse(padj > 1.3, "*", ""),
+         labelC = ifelse(log2FC > 0, "black", "white"))
+  
+
+ggplot(df_plot_merge, aes(x=external_gene_name, y = condition, fill = log2FC)) +
+  geom_tile(color = "white") +theme_classic()+
+  xlab("PNS DEGs")+ylab("condition") + 
+  theme(text =  element_text(color = "black"),
+        axis.line = element_blank(), 
+        axis.ticks = element_blank())+
+  scale_y_discrete(expand = c(0,0))+
+  geom_text(aes(label = pLabel), color = df_plot_merge$labelC, size = 4)+
+  coord_flip()+scale_fill_viridis_c(limits = c(-5, 5),option="A")
+
+## Top genes CNS
+df_plot <- dds_ctrlCNS %>% 
+  filter(abs(log2FoldChange) > 1,padj < 0.05) %>%
+  dplyr::select(c(external_gene_name,log2FoldChange,padj)) %>% 
+  filter((str_detect(external_gene_name,"ENSRNOG|LOC",negate = T))) %>%
+  arrange(log2FoldChange) %>% dplyr::slice(c(1:14, (n()-15):n()))%>%
+  mutate(logp = -log10(padj), 
+         logp = ifelse(logp > 10, 10, logp),
+         external_gene_name = factor(external_gene_name, 
+                                     levels = external_gene_name)) 
+# Add CNS values
+mergeOrder = df_plot$external_gene_name
+df_plot_merge <- df_plot %>% 
+  dplyr::select(c(external_gene_name,log2FoldChange,logp)) %>%
+  left_join(dds_ctrlPNS %>%  mutate(logp = -log10(padj)) %>%
+              dplyr::select(c(external_gene_name,log2FoldChange,logp)),
+            by = "external_gene_name") %>%
+  pivot_longer(cols = c(2,4),names_to = "condition", values_to = "log2FC") %>%
+  mutate(condition = ifelse(condition == "log2FoldChange.x", "CNS", "PNS"),
+         log2FC = ifelse(log2FC > 5, 5, ifelse(log2FC < -5, -5, log2FC)),
+         external_gene_name= factor(external_gene_name, mergeOrder)) %>%
+  mutate(padj = paste0(logp.x,"_", logp.y),
+         padj = ifelse(condition == "CNS", 
+                       str_split_i(padj, pattern = "_", i = 1),
+                       str_split_i(padj, pattern = "_", i = 2)),
+         pLabel = ifelse(padj > 1.3, "*", ""),
+         labelC = ifelse(log2FC > 0, "black", "white"))
+  
+
+ggplot(df_plot_merge, aes(x=external_gene_name, y = condition, fill = log2FC)) +
+  geom_tile(color = "white") +theme_classic()+
+  xlab("PNS DEGs")+ylab("condition") + 
+  theme(text =  element_text(color = "black"),
+        axis.line = element_blank(), 
+        axis.ticks = element_blank())+
+  scale_y_discrete(expand = c(0,0))+
+  geom_text(aes(label = pLabel), color = df_plot_merge$labelC, size = 4)+
+  coord_flip()+scale_fill_viridis_c(limits = c(-5, 5),option="A")
 
 
 
+```
