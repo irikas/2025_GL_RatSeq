@@ -1,0 +1,172 @@
+---
+title: "250805_GL_GSEA"
+author: "Irika Sinha"
+date: "2025-08-05"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Purpose
+The purpose of this script is to take the ranking of genes from CNS/PNS LPS treatments and conduct GSEA.
+
+## Packages
+
+```{r packages}
+CRANpackages <- c("tidyverse", "ggplot2", "ggpubr", 
+                  "ggstats","BiocManager","viridis",
+                  "gghighlight", "ggrepel","pheatmap","readxl")
+biocPackages <- c("apeglm", "DESeq2","limma", "biomaRt","fgsea")
+
+for(i in CRANpackages){
+  if(!(i %in% rownames(installed.packages()))){
+    install.packages(pkgs = i)
+  }
+  library(package = i, character.only = T, quietly = T)
+  rm(i)
+}
+
+for(i in biocPackages){
+  if(!(i %in% rownames(installed.packages()))){
+    BiocManager::install(pkgs = i, ask = F)
+  }
+  library(package = i, character.only = T, quietly = T)
+  rm(i)
+}
+
+rm(CRANpackages,biocPackages)
+
+```
+
+## Files
+```{r Files}
+setwd("/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/2025_GL_RatSeq/")
+dds <- readRDS("data/dds_annotated.RDS")
+pathways.hallmark <- gmtPathways("/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250527_MSB_Seq/MEDmousemodel/MSB_MED_Seq/data/mh.all.v2025.1.Mm.symbols.gmt")
+```
+
+## GSEA for LPS treatment in CNS and PNS
+Using [FGSEA](https://stephenturner.github.io/deseq-to-fgsea/) package.
+```{r LPSgsea}
+# Load results tables
+dds_ctrlPNS <- read_csv("/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/2025_GL_RatSeq/output/dds_ctrlPNS_ref_df.csv")[,-1]
+dds_ctrlCNS <- read_csv("/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/2025_GL_RatSeq/output/dds_ctrlCNS_ref_df.csv")[,-1]
+
+# Add test statistic & remove duplicates by averaging
+dds_ctrlPNS <- dds_ctrlPNS %>% mutate(stat = log2FoldChange/lfcSE) %>% 
+  dplyr::select(external_gene_name, stat) %>% 
+  na.omit() %>% 
+  distinct() %>% 
+  group_by(external_gene_name) %>% 
+  summarize(stat=mean(stat)) %>%
+  filter(external_gene_name != "") 
+
+dds_ctrlCNS <- dds_ctrlCNS %>% mutate(stat = log2FoldChange/lfcSE) %>% na.omit() %>% 
+  dplyr::select(external_gene_name, stat) %>% 
+  na.omit() %>% 
+  distinct() %>% 
+  group_by(external_gene_name) %>% 
+  summarize(stat=mean(stat)) %>%
+  filter(external_gene_name != "") 
+
+# Add rank order
+PNS_ranks <- deframe(dds_ctrlPNS)
+CNS_ranks <- deframe(dds_ctrlCNS)
+
+# conduct GSEA
+fgsea_df_PNS <- fgsea(pathways=pathways.hallmark, stats=PNS_ranks) %>%
+  dplyr::select(-leadingEdge, -ES)  %>% mutate(metaCol = "PNS")
+fgsea_df_CNS <- fgsea(pathways=pathways.hallmark, stats=CNS_ranks) %>%
+  dplyr::select(-leadingEdge, -ES)  %>% mutate(metaCol = "CNS")
+
+# Merge results
+uniquePathways<- unique(c((fgsea_df_PNS %>% filter(padj < 0.05))$pathway,
+                          (fgsea_df_CNS %>% filter(padj < 0.05))$pathway))
+fgsea_df <- rbind(fgsea_df_PNS %>% filter(pathway %in% uniquePathways),
+                  fgsea_df_CNS %>% filter(pathway %in% uniquePathways)) %>%
+  mutate(HallmarkPathway = gsub("HALLMARK_",replacement = "", x = pathway),
+         HallmarkPathway = gsub("_", replacement = " ", x = HallmarkPathway),
+         HallmarkPathway = str_to_title(HallmarkPathway))
+
+order_df <- fgsea_df %>% dplyr::select(HallmarkPathway,metaCol,NES) %>% 
+  pivot_wider(names_from = metaCol, values_from = NES) %>%
+  mutate(concordance = ifelse(sign(PNS) == sign(CNS), "Y","N"))
+
+sameSign = unique((order_df %>% filter(concordance == "Y") %>% arrange(-CNS))$HallmarkPathway)
+diffSign = unique((order_df %>% filter(concordance == "N") %>% arrange(-CNS))$HallmarkPathway) 
+
+fgsea_df %>% filter(HallmarkPathway %in% sameSign) %>%
+  mutate(HallmarkPathway = factor(HallmarkPathway, sameSign),
+         NES = ifelse(NES > 3, 3, ifelse(NES < -3, -3, NES))) %>%
+  ggplot(aes(x = metaCol, y = HallmarkPathway, fill = NES)) +
+  geom_tile(colour = "black") + 
+  theme_classic()+
+  ylab("")+ xlab("")+
+  theme(axis.text.y = element_text(color="black", family="Helvetica", size =10),
+        axis.text.x = element_text(angle = 30, hjust=1,
+                                   color="black", family="Helvetica", size =15),
+        axis.line = element_blank(), axis.ticks = element_blank(),
+        title = element_text(size = 10))+
+  scale_fill_gradient2(low="#364b9a",mid = "white",high = "#a50026",
+                       na.value = "#444444", midpoint=0,limits = c(-3, 3))
+
+fgsea_df %>% filter(HallmarkPathway %in% diffSign) %>%
+  mutate(HallmarkPathway = factor(HallmarkPathway, diffSign),
+         NES = ifelse(NES > 3, 3, ifelse(NES < -3, -3, NES))) %>%
+  ggplot(aes(x = metaCol, y = HallmarkPathway, fill = NES)) +
+  geom_tile(colour = "black") + 
+  theme_classic()+
+  ylab("")+ xlab("")+
+  theme(axis.text.y = element_text(color="black", family="Helvetica", size =10),
+        axis.text.x = element_text(angle = 30, hjust=1,
+                                   color="black", family="Helvetica", size =15),
+        axis.line = element_blank(), axis.ticks = element_blank(),
+        title = element_text(size = 10))+
+  scale_fill_gradient2(low="#364b9a",mid = "white",high = "#a50026",
+                       na.value = "#444444", midpoint=0,limits = c(-3, 3))
+
+```
+
+## Check VNS vs LPS
+```{r VNS_LPS_gsea}
+# Load results tables
+dds_PNS <- read_csv("/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/2025_GL_RatSeq/output/dds_VNS_LPS_PNS_ref_df.csv")[,-1]
+dds_CNS <- read_csv("/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/2025_GL_RatSeq/output/dds_VNS_LPS_CNS_ref_df.csv")[,-1]
+
+# Add test statistic & remove duplicates by averaging
+dds_PNS <- dds_PNS %>% mutate(stat = log2FoldChange/lfcSE) %>% 
+  dplyr::select(external_gene_name, stat) %>% 
+  na.omit() %>% 
+  distinct() %>% 
+  group_by(external_gene_name) %>% 
+  summarize(stat=mean(stat)) %>%
+  filter(external_gene_name != "") 
+
+dds_CNS <- dds_CNS %>% mutate(stat = log2FoldChange/lfcSE) %>% na.omit() %>% 
+  dplyr::select(external_gene_name, stat) %>% 
+  na.omit() %>% 
+  distinct() %>% 
+  group_by(external_gene_name) %>% 
+  summarize(stat=mean(stat)) %>%
+  filter(external_gene_name != "") 
+
+# Add rank order
+PNS_ranks <- deframe(dds_PNS)
+CNS_ranks <- deframe(dds_CNS)
+
+# conduct GSEA
+fgsea_df_PNS <- fgsea(pathways=pathways.hallmark, stats=PNS_ranks) %>%
+  dplyr::select(-leadingEdge, -ES)  %>% mutate(metaCol = "PNS")
+fgsea_df_CNS <- fgsea(pathways=pathways.hallmark, stats=CNS_ranks) %>%
+  dplyr::select(-leadingEdge, -ES)  %>% mutate(metaCol = "CNS")
+
+# No pathways with padj < 0.05
+fgsea_df_PNS %>% arrange(padj) %>% slice_head(n = 10)
+fgsea_df_CNS %>% arrange(padj) %>% slice_head(n = 10)
+
+```
+
+
+

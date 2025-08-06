@@ -278,7 +278,7 @@ dds$condition <- relevel(dds$condition, ref = "CTRL_PNS")
 
 # Add design
 design(dds) <- formula(~ condition)
-# saveRDS(dds, "/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/2025_GL_RatSeq/dds_annotated.RDS")
+# saveRDS(dds, "/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/2025_GL_RatSeq/data/dds_annotated.RDS")
 
 ## DESeq2 Analysis: PNS
 dds_ctrlPNS <- DESeq(dds)
@@ -388,3 +388,35 @@ ggplot(df_plot_merge, aes(x=external_gene_name, y = condition, fill = log2FC)) +
 
 
 ```
+
+## VNS vs LPS
+```{r vns_dfs}
+dds <- readRDS("/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/2025_GL_RatSeq/data/dds_annotated.RDS")
+
+## DESeq2 Analysis: PNS
+dds$condition <- relevel(dds$condition, ref = "LPS_CNS")
+dds_CNS <- lfcShrink(DESeq(dds), coef="condition_VNS_CNS_vs_LPS_CNS",  type="apeglm") %>% as.data.frame()
+
+## DESeq2 Analysis: CNS
+dds$condition <- relevel(dds$condition, ref = "LPS_PNS")
+dds_PNS <- lfcShrink(DESeq(dds), coef="condition_VNS_PNS_vs_LPS_PNS",  type="apeglm") %>% as.data.frame()
+
+# Add gene names
+dds_CNS <- dds_CNS %>% rownames_to_column("ensembl_gene_id") %>%
+  inner_join(gene_names %>% filter(gene_biotype == "protein_coding") %>% 
+               dplyr::select(!c("gene_biotype")),
+             by = "ensembl_gene_id") %>%
+  relocate(external_gene_name, .before = "ensembl_gene_id") %>%
+  mutate(external_gene_name = ifelse(external_gene_name == "", ensembl_gene_id, external_gene_name))
+
+dds_PNS <- dds_PNS %>% rownames_to_column("ensembl_gene_id") %>%
+  inner_join(gene_names %>% filter(gene_biotype == "protein_coding") %>% 
+               dplyr::select(!c("gene_biotype")),
+             by = "ensembl_gene_id") %>%
+  relocate(external_gene_name, .before = "ensembl_gene_id") %>%
+  mutate(external_gene_name = ifelse(external_gene_name == "", ensembl_gene_id, external_gene_name))
+
+# write.csv(dds_CNS, "/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/2025_GL_RatSeq/output/dds_VNS_LPS_CNS_ref_df.csv")
+# write.csv(dds_PNS, "/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/2025_GL_RatSeq/output/dds_VNS_LPS_PNS_ref_df.csv")
+```
+
