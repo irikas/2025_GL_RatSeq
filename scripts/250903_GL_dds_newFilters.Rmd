@@ -135,6 +135,32 @@ dds$condition <- relevel(dds$condition, ref = "CTRL_PNS")
 design(dds) <- formula(~ treatment)
 
 # saveRDS(dds, "/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/2025_GL_RatSeq/data/250903_filtered_annotated_dds.RDS")
+
+# PCA
+pcaData <- plotPCA(vst(dds), intgroup=c("tissue", "treatment"), returnData = T)
+ggplot(pcaData,aes(x = PC1, y = PC2, color = tissue, shape = treatment)) + geom_point(size = 2, alpha = 0.8)+
+  theme_classic()+theme(text=element_text(color="black", size = 12)) + 
+  scale_colour_manual(values = c("#5D0D0D", "#111344", "#ADA8B6"))
+
+pcaData <- plotPCA(vst(dds[,which(colData(dds)$tissue == "cortex")]), intgroup=c("treatment"), returnData = T)
+ggplot(pcaData,aes(x = PC1, y = PC2, color = treatment)) + geom_point(size = 4, alpha = 1)+
+  theme_classic()+theme(text=element_text(color="black", size = 12)) + 
+  scale_colour_manual(values = c("#5D0D0D", "#111344", "#ADA8B6")) +
+  theme(legend.position = "none")
+
+pcaData <- plotPCA(vst(dds[,which(colData(dds)$tissue == "hippocampus")]), intgroup=c("treatment"), returnData = T)
+ggplot(pcaData,aes(x = PC1, y = PC2, color = treatment)) + geom_point(size = 4, alpha = 1)+
+  theme_classic()+theme(text=element_text(color="black", size = 12)) + 
+  scale_colour_manual(values = c("#5D0D0D", "#111344", "#ADA8B6")) +
+  theme(legend.position = "none")
+
+pcaData <- plotPCA(vst(dds[,which(colData(dds)$tissue == "PNS")]), intgroup=c("treatment"), returnData = T)
+ggplot(pcaData,aes(x = PC1, y = PC2, color = treatment)) + geom_point(size = 4, alpha = 1)+
+  theme_classic()+theme(text=element_text(color="black", size = 12)) + 
+  scale_colour_manual(values = c("#5D0D0D", "#111344", "#ADA8B6")) +
+  theme(legend.position = "none")
+
+
 ```
 
 ## Differential gene expression analysis based on treatment
@@ -177,30 +203,6 @@ mergedf <- dds_LPS[,c("external_gene_name", "ensembl_gene_id", "log2FoldChange",
   full_join(dds_VNS[,c("external_gene_name", "ensembl_gene_id","log2FoldChange", "padj")], 
             by = c("external_gene_name","ensembl_gene_id"),suffix = c("_LPS","_VNS"))
 # saveRDS(mergedf,"/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/2025_GL_RatSeq/output/250903_mergedTreatment_df.RDS")
-
-# PCA
-pcaData <- plotPCA(vst(dds), intgroup=c("tissue", "treatment"), returnData = T)
-ggplot(pcaData,aes(x = PC1, y = PC2, color = tissue, shape = treatment)) + geom_point(size = 2, alpha = 0.8)+
-  theme_classic()+theme(text=element_text(color="black", size = 12)) + 
-  scale_colour_manual(values = c("#5D0D0D", "#111344", "#ADA8B6"))
-
-pcaData <- plotPCA(vst(dds[,which(colData(dds)$tissue == "cortex")]), intgroup=c("treatment"), returnData = T)
-ggplot(pcaData,aes(x = PC1, y = PC2, color = treatment)) + geom_point(size = 4, alpha = 1)+
-  theme_classic()+theme(text=element_text(color="black", size = 12)) + 
-  scale_colour_manual(values = c("#5D0D0D", "#111344", "#ADA8B6")) +
-  theme(legend.position = "none")
-
-pcaData <- plotPCA(vst(dds[,which(colData(dds)$tissue == "hippocampus")]), intgroup=c("treatment"), returnData = T)
-ggplot(pcaData,aes(x = PC1, y = PC2, color = treatment)) + geom_point(size = 4, alpha = 1)+
-  theme_classic()+theme(text=element_text(color="black", size = 12)) + 
-  scale_colour_manual(values = c("#5D0D0D", "#111344", "#ADA8B6")) +
-  theme(legend.position = "none")
-
-pcaData <- plotPCA(vst(dds[,which(colData(dds)$tissue == "PNS")]), intgroup=c("treatment"), returnData = T)
-ggplot(pcaData,aes(x = PC1, y = PC2, color = treatment)) + geom_point(size = 4, alpha = 1)+
-  theme_classic()+theme(text=element_text(color="black", size = 12)) + 
-  scale_colour_manual(values = c("#5D0D0D", "#111344", "#ADA8B6")) +
-  theme(legend.position = "none")
 
 ```
 
@@ -291,4 +293,41 @@ ggplot(df_plot, aes(x=external_gene_name, y = condition_lfc,
 
 ```
 
+## Differential gene expression analysis compared to LPS as set-point
+All organs are grouped together - only difference in treatment is considered
 
+```{r treatmentDGE}
+setwd("/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/2025_GL_RatSeq/")
+dds <- readRDS("data/250903_filtered_annotated_dds.RDS")
+
+## Use Ensembl database to download gene ENMUS gene names to gene names + subset to protein-coding genes
+gene_names <- readRDS("data/250903_filtered_annotated_dds_geneNames.RDS")
+
+## DESeq2 Analysis: Treatment
+dds$treatment <- relevel(dds$treatment, ref = "LPS")
+dds <- DESeq(dds)
+dds_VNS <- lfcShrink(dds, coef="treatment_VNS_vs_LPS",  type="apeglm") %>% as.data.frame() %>%
+  rownames_to_column("ensembl_gene_id") %>%
+  inner_join(gene_names %>% filter(gene_biotype == "protein_coding") %>% 
+               dplyr::select(!c("gene_biotype")),
+             by = "ensembl_gene_id") %>%
+  relocate(external_gene_name, .before = "ensembl_gene_id") %>%
+  mutate(external_gene_name = ifelse(external_gene_name == "", ensembl_gene_id, external_gene_name))
+
+dds_Ctrl <- lfcShrink(dds, coef="treatment_CTRL_vs_LPS",  type="apeglm") %>% as.data.frame() %>%
+  rownames_to_column("ensembl_gene_id") %>%
+  inner_join(gene_names %>% filter(gene_biotype == "protein_coding") %>% 
+               dplyr::select(!c("gene_biotype")),
+             by = "ensembl_gene_id") %>%
+  relocate(external_gene_name, .before = "ensembl_gene_id") %>%
+  mutate(external_gene_name = ifelse(external_gene_name == "", ensembl_gene_id, external_gene_name))
+
+# merge dfs
+mergedf <- dds_VNS[,c("external_gene_name", "ensembl_gene_id", "log2FoldChange", "padj")] %>%
+  full_join(dds_Ctrl[,c("external_gene_name", "ensembl_gene_id","log2FoldChange", "padj")], 
+            by = c("external_gene_name","ensembl_gene_id"),suffix = c("_VNS","_Ctrl"))
+# saveRDS(mergedf,"output/250903_mergedTreatment_VNSref_df.RDS")
+
+```
+
+There aren't any significant differences between VNS and LPS treatments still.
