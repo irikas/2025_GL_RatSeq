@@ -331,3 +331,196 @@ mergedf <- dds_VNS[,c("external_gene_name", "ensembl_gene_id", "log2FoldChange",
 ```
 
 There aren't any significant differences between VNS and LPS treatments still.
+
+## Differential gene expression analysis based on treatment and organ
+All organs are grouped together - only difference in treatment is considered
+
+```{r treatmentDGE}
+setwd("/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/2025_GL_RatSeq/")
+dds <- readRDS("data/250903_filtered_annotated_dds.RDS")
+
+## Use Ensembl database to download gene ENMUS gene names to gene names + subset to protein-coding genes
+gene_names <- readRDS("data/250903_filtered_annotated_dds_geneNames.RDS") %>% 
+  filter(gene_biotype == "protein_coding") %>%
+  dplyr::select(!c("gene_biotype"))
+
+metadata <- colData(dds) %>% as.data.frame()
+
+
+## Split into each organ
+dds_hip <- dds[, metadata$tissue == "hippocampus"]
+dds_cx <- dds[, metadata$tissue == "cortex"]
+dds_sp<- dds[, metadata$tissue == "PNS"]
+
+## DESeq2 Analysis: Treatment x Organ
+
+degx <- function(dds, gene_names){
+  dds <- DESeq(dds)
+  dds_LPS <- lfcShrink(dds, coef="treatment_LPS_vs_CTRL",  type="apeglm") %>% as.data.frame() %>%
+  rownames_to_column("ensembl_gene_id") %>%
+  inner_join(gene_names, by = "ensembl_gene_id") %>%
+  relocate(external_gene_name, .before = "ensembl_gene_id") %>%
+  mutate(external_gene_name = ifelse(external_gene_name == "", ensembl_gene_id, external_gene_name))
+  
+  dds_VNS <- lfcShrink(dds, coef="treatment_VNS_vs_CTRL",  type="apeglm") %>% as.data.frame() %>%
+  rownames_to_column("ensembl_gene_id") %>%
+  inner_join(gene_names, by = "ensembl_gene_id") %>%
+  relocate(external_gene_name, .before = "ensembl_gene_id") %>%
+  mutate(external_gene_name = ifelse(external_gene_name == "", ensembl_gene_id, external_gene_name))
+  
+  # merge dfs
+  mergedf <- dds_LPS[,c("external_gene_name", "ensembl_gene_id", "log2FoldChange", "padj")] %>%
+    full_join(dds_VNS[,c("external_gene_name", "ensembl_gene_id","log2FoldChange", "padj")],
+              by = c("external_gene_name","ensembl_gene_id"),suffix = c("_LPS","_VNS"))
+  
+  return(mergedf)
+}
+
+
+## DESeq2 Analysis: Treatment
+deg_hip <- degx(dds = dds_hip, gene_names = gene_names)
+deg_cx <- degx(dds = dds_cx, gene_names = gene_names)
+deg_sp <- degx(dds = dds_sp, gene_names = gene_names)
+
+# Merge
+deg_all <- rbind(deg_hip %>% mutate(tissue = "hip"), deg_cx %>% mutate(tissue = "cx"))
+deg_all <- rbind(deg_all, deg_sp %>% mutate(tissue = "sp"))
+
+# saveRDS(deg_hip,"output/250927_mergedTreatment_hip_LPSref_df.RDS")
+# saveRDS(deg_cx,"output/250927_mergedTreatment_cx_LPSref_df.RDS")
+# saveRDS(deg_sp,"output/250927_mergedTreatment_spleen_LPSref_df.RDS")
+# saveRDS(deg_all,"output/250927_mergedTreatment_tissuesep_LPSref_df.RDS")
+
+
+```
+
+## Visualize top genes across the different conditions, based on organ
+```{r treatmentDGE_vis}
+setwd("/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/2025_GL_RatSeq/")
+mergedf <- readRDS("output/250927_mergedTreatment_tissuesep_LPSref_df")
+
+# Filter by expression (log2(0.75) = -0.42, log2(1.25) = 0.32)
+df <- mergedf 
+df$log2fcMax = apply(df[,c("log2FoldChange_LPS","log2FoldChange_VNS")], 1, max)
+df$log2fcmin = apply(df[,c("log2FoldChange_LPS","log2FoldChange_VNS")], 1, min)
+df$log2fcdiff = apply(df[,c("log2FoldChange_LPS","log2FoldChange_VNS")], 1, var )
+df_filter <- df %>% filter(case_when(log2fcMax < 0.32 ~ log2fcmin < -0.42, 
+                   log2fcmin > -0.42 ~ log2fcMax > 0.32,
+                   log2fcmin < -0.42 ~ log2fcMax > 0.32))
+
+# Function for top DEGs
+plotting_DEGs_df <- function(degList){
+  df_top <- degList %>% slice_max(log2fcMax, n=30) %>%
+  pivot_longer(cols=c("log2FoldChange_LPS","log2FoldChange_VNS"), 
+               names_to = "condition_lfc", names_prefix = "log2FoldChange_", 
+               values_to = "log2FC") %>%
+    pivot_longer(cols=c("padj_LPS","padj_VNS"), 
+               names_to = "condition_padj", names_prefix = "padj_", 
+               values_to = "padj") %>% 
+  mutate(keep = "N", keep = ifelse(condition_lfc == condition_padj, "Y","N")) %>%
+  filter(keep == "Y") %>% dplyr::select(-c("keep","condition_padj"))
+  
+  df_tail <- degList %>% slice_min(log2fcmin, n=30) %>%
+  pivot_longer(cols=c("log2FoldChange_LPS","log2FoldChange_VNS"), 
+               names_to = "condition_lfc", names_prefix = "log2FoldChange_", 
+               values_to = "log2FC") %>%
+    pivot_longer(cols=c("padj_LPS","padj_VNS"), 
+               names_to = "condition_padj", names_prefix = "padj_", 
+               values_to = "padj") %>% 
+  mutate(keep = "N", keep = ifelse(condition_lfc == condition_padj, "Y","N")) %>%
+  filter(keep == "Y") %>% dplyr::select(-c("keep","condition_padj")) 
+  
+  order <- rev(unique(c((df_top %>% arrange(-log2fcMax))$external_gene_name, 
+                      (df_tail %>% arrange(-log2fcmin))$external_gene_name)))
+  df_plot <- rbind(df_top,df_tail) %>% 
+    mutate(external_gene_name = factor(external_gene_name, levels = order)) %>% 
+    mutate(log2FC = ifelse(log2FC>10,10, ifelse(log2FC < -5, -5, log2FC))) %>%
+    mutate(pLabel = ifelse(padj < 0.001, "***",ifelse(padj < 0.01, "**",ifelse(padj < 0.05, "*",""))), 
+         labelC = ifelse(round(log2FC,0) > 0, "black", "white"))
+  
+  return(df_plot)
+}
+
+# HIP: Top 30 DEGs
+df_hip_plot <- plotting_DEGs_df(df_filter %>% filter(tissue == "hip"))
+
+ggplot(df_hip_plot, aes(x=external_gene_name, y = condition_lfc, 
+                    fill = log2FC, label = pLabel)) +
+  geom_tile(color = "white") +theme_classic()+
+  xlab("")+ylab("") + 
+  theme(text =  element_text(color = "black", size = 12),
+        axis.line = element_blank(), 
+        axis.ticks = element_blank())+
+  scale_y_discrete(expand = c(0,0))+
+  geom_text(color = df_hip_plot$labelC, size = 4)+
+  theme(axis.text.x = element_text(angle=45, hjust = 1, vjust=1))+
+  scale_fill_viridis_c(limits = c(-5, 10),option="A")
+
+# cx: Top 30 DEGs
+df_cx_plot <- plotting_DEGs_df(df_filter %>% filter(tissue == "cx"))
+
+ggplot(df_cx_plot, aes(x=external_gene_name, y = condition_lfc, 
+                    fill = log2FC, label = pLabel)) +
+  geom_tile(color = "white") +theme_classic()+
+  xlab("")+ylab("") + 
+  theme(text =  element_text(color = "black", size = 12),
+        axis.line = element_blank(), 
+        axis.ticks = element_blank())+
+  scale_y_discrete(expand = c(0,0))+
+  geom_text(color = df_cx_plot$labelC, size = 4)+
+  theme(axis.text.x = element_text(angle=45, hjust = 1, vjust=1))+
+  scale_fill_viridis_c(limits = c(-5, 10),option="A")
+
+# spleen: Top 30 DEGs
+df_sp_plot <- plotting_DEGs_df(df_filter %>% filter(tissue == "sp"))
+
+ggplot(df_sp_plot, aes(x=external_gene_name, y = condition_lfc, 
+                    fill = log2FC, label = pLabel)) +
+  geom_tile(color = "white") +theme_classic()+
+  xlab("")+ylab("") + 
+  theme(text =  element_text(color = "black", size = 12),
+        axis.line = element_blank(), 
+        axis.ticks = element_blank())+
+  scale_y_discrete(expand = c(0,0))+
+  geom_text(color = df_sp_plot$labelC, size = 4)+
+  theme(axis.text.x = element_text(angle=45, hjust = 1, vjust=1))+
+  scale_fill_viridis_c(limits = c(-5, 10),option="A")
+
+# Overlapping top 30 in each condition
+LPS_genes <- c((df_cx_plot %>% filter(condition_lfc == "LPS"))$external_gene_name,
+                         (df_hip_plot %>% filter(condition_lfc == "LPS"))$external_gene_name,
+                          (df_sp_plot %>% filter(condition_lfc == "LPS"))$external_gene_name)
+LPS_genes <- LPS_genes[duplicated(LPS_genes)]
+
+
+df_plot <- mergedf %>% filter(external_gene_name %in% LPS_genes) %>%
+  pivot_longer(cols=c("log2FoldChange_LPS","log2FoldChange_VNS"), 
+               names_to = "condition_lfc", names_prefix = "log2FoldChange_", 
+               values_to = "log2FC") %>%
+    pivot_longer(cols=c("padj_LPS","padj_VNS"), 
+               names_to = "condition_padj", names_prefix = "padj_", 
+               values_to = "padj") %>% 
+  mutate(keep = "N", keep = ifelse(condition_lfc == condition_padj, "Y","N")) %>%
+  filter(keep == "Y", condition_lfc == "LPS") %>% dplyr::select(-c("keep","condition_padj")) 
+
+order <- rev(unique(c((df_plot %>% arrange(-log2FC))$external_gene_name)))
+
+df_plot <- df_plot %>% mutate(external_gene_name = factor(external_gene_name, levels = order)) %>% 
+  mutate(log2FC = ifelse(log2FC>10,10, ifelse(log2FC < -5, -5, log2FC))) %>%
+  mutate(pLabel = ifelse(padj < 0.001, "***",ifelse(padj < 0.01, "**",ifelse(padj < 0.05, "*",""))), 
+         labelC = ifelse(round(log2FC,0) > 0, "black", "white"))
+
+ggplot(df_plot, aes(x=external_gene_name, y = tissue, 
+                    fill = log2FC, label = pLabel)) +
+  geom_tile(color = "white") +theme_classic()+
+  xlab("")+ylab("") + 
+  theme(text =  element_text(color = "black", size = 12),
+        axis.line = element_blank(), 
+        axis.ticks = element_blank())+
+  scale_y_discrete(expand = c(0,0))+
+  geom_text(color = df_plot$labelC, size = 4)+
+  theme(axis.text.x = element_text(angle=45, hjust = 1, vjust=1))+
+  scale_fill_viridis_c(limits = c(-5, 10),option="A")
+
+
+```
