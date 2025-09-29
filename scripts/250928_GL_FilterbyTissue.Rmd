@@ -66,106 +66,95 @@ dds$sampID <- factor(dds$sampID, levels = unique(dds$sampID))
 # Add coldata on condition
 dds@colData$condition = paste0(dds@colData$treatment,"_", dds@colData$tissue)
 dds$condition <- factor(dds$condition, levels = unique(dds$condition))
-dds$condition <- relevel(dds$condition, ref = "CTRL_spleen")
+dds$condition <- relevel(dds$condition, ref = "CTRL_PNS")
+
+# Re-level treatment
+dds$treatment <- factor(dds$treatment, levels = unique(dds$treatment))
+dds$treatment <- relevel(dds$treatment, ref = "CTRL")
+design(dds) <- formula(~ treatment)
 
 ## Split dds
 metadata <- colData(dds) %>% as.data.frame()
 dds_hip <- dds[, metadata$tissue == "hippocampus"]
 dds_cx <- dds[, metadata$tissue == "cortex"]
-dds_sp<- dds[, metadata$tissue == "spleen"]
+dds_sp<- dds[, metadata$tissue == "PNS"]
 
 ## Filter genes and add dds design
 dds_list <- list(dds_cx, dds_hip, dds_sp)
 names(dds_list) = c("cortex", "hippocampus", "spleen")
-dds_list <- lapply(dds_list, function(dds){
-  # Filter out low expression genes - there should be at least5 counts in total across all samples
-  dds[rowSums(counts(dds)) >= 5,]
-  
-  # Add design
-  dds$treatment <- factor(dds$treatment, levels = unique(dds$treatment))
-  dds$treatment <- relevel(dds$treatment, ref = "CTRL")
-  design(dds) <- formula(~ treatment)
-  return(dds)
-})
+dds_list <- lapply(dds_list, function(dds) dds[rowSums(counts(dds)) >= 5,])
 
 # saveRDS(dds_list,"/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/2025_GL_RatSeq/output/250928_fo;tered_dds_list.RDS")
 
-## DESeq2 Analysis: LPS vs CTRL
-dds_list_LPS <- lapply(dds_list, function(dds) {
-  # Run DESeq2
-  dds <- DESeq(dds)
-  
-  # Create data frames
-  lfcShrink(dds, coef="treatment_LPS_vs_CTRL",  type="apeglm") %>% as.data.frame() %>%
+## Create function to create DEG dataframe
+dfpostDESeq <- function(dds, coefstring){
+  lfcShrink(dds, coef=coefstring,  type="apeglm") %>% as.data.frame() %>%
     rownames_to_column("ensembl_gene_id") %>%
     inner_join(gene_names, by = "ensembl_gene_id") %>%
     relocate(external_gene_name, .before = "ensembl_gene_id") %>%
     mutate(external_gene_name = ifelse(external_gene_name == "", ensembl_gene_id, external_gene_name))
-})
+}
+
+## DESeq2 Analysis: LPS vs CTRL
+dds_list_LPS <- lapply(dds_list, function(dds) DESeq(dds))
+dds_list_LPS <- lapply(dds_list_LPS, function(dds) dfpostDESeq(dds, coefstring = "treatment_LPS_vs_CTRL")) 
 
 ## DESeq2 Analysis: VNS vs LPS
-dds_list_VNS <- lapply(dds_list, function(dds) {
-  # Add design
-  dds$treatment <- factor(dds$treatment, levels = unique(dds$treatment))
+relevelFxn <- function(dds){
   dds$treatment <- relevel(dds$treatment, ref = "LPS")
-  design(dds) <- formula(~ treatment)
-  
-  # Run DESeq2
-  dds <- DESeq(dds)
-  
-  # Create data frames
-  lfcShrink(dds, coef="treatment_VNS_vs_LPS",  type="apeglm") %>% as.data.frame() %>%
-    rownames_to_column("ensembl_gene_id") %>%
-    inner_join(gene_names, by = "ensembl_gene_id") %>%
-    relocate(external_gene_name, .before = "ensembl_gene_id") %>%
-    mutate(external_gene_name = ifelse(external_gene_name == "", ensembl_gene_id, external_gene_name))
-})
+  return(dds)
+}
+
+dds_list_VNS <- lapply(dds_list, function(dds) relevelFxn(dds))
+dds_list_VNS <- lapply(dds_list_VNS, function(dds) DESeq(dds))
+dds_list_VNS <- lapply(dds_list_VNS, function(dds) dfpostDESeq(dds, coefstring = "treatment_VNS_vs_LPS")) 
 
 # saveRDS(dds_list_LPS,"/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/2025_GL_RatSeq/output/250928_dds_list_deseq_LPS.RDS")
 # saveRDS(dds_list_VNS,"/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/2025_GL_RatSeq/output/250928_dds_list_deseq_VNS.RDS")
 
 ```
 
+Set exclusions of low expression genes as following: 
+-Filter genes to protein coding genes
+-For each tissue type: filter out very low expression genes (5 counts in total across all samples)
 
-```{r visualization}
+```{r visualization5exc}
 # Load lists
 dds_list_LPS <- readRDS("/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/2025_GL_RatSeq/output/250928_dds_list_deseq_LPS.RDS")
 dds_list_VNS <- readRDS("/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/2025_GL_RatSeq/output/250928_dds_list_deseq_VNS.RDS")
 
 # Set log2FC max to 10 and padj to 10 or lower
-dds_list_LPS <- lapply(dds_list_LPS, function(dds){
+graphMax <- function(dds){
   dds <- dds %>% 
     mutate(log2FoldChange = ifelse(log2FoldChange > 10, 10, ifelse(log2FoldChange < -10, -10, log2FoldChange))) %>%
-    mutate(padj = ifelse(padj < 10^-10, 10^-10, padj)) 
-})
-
-dds_list_VNS <- lapply(dds_list_VNS, function(dds){
-  dds <- dds %>% 
-    mutate(log2FoldChange = ifelse(log2FoldChange > 10, 10, ifelse(log2FoldChange < -10, -10, log2FoldChange))) %>%
-    mutate(padj = ifelse(padj < 10^-10, 10^-10, padj)) 
-})
+    mutate(padj = ifelse(padj < 10^-10, 10^-10, padj))
+  return(dds)
+}
+dds_list_LPS <- lapply(dds_list_LPS, function(dds) graphMax(dds))
+dds_list_VNS <- lapply(dds_list_VNS, function(dds) graphMax(dds))
 
 # Volcano plots for each (LPS)
 deg_cortex <- dds_list_LPS$cortex %>% as.data.frame()
 rownames(deg_cortex) <- make.unique(deg_cortex$external_gene_name, sep = "_")
 EnhancedVolcano(deg_cortex, lab = rownames(deg_cortex), x = 'log2FoldChange', y = 'padj',
-                pCutoff = 0.2, FCcutoff = 1.5, pointSize = 2, labSize = 5, 
+                pCutoff = 0.05, FCcutoff = 1.5, pointSize = 2, labSize = 5, 
                 col=c('black', 'black', 'black', 'red3'), 
                 colAlpha = 0.5,ylim = c(0,10),gridlines.minor=F,gridlines.major=F,
                 legendPosition = "none", titleLabSize = 0.01, subtitleLabSize=0.01)
 
+
 deg_hip <- dds_list_LPS$hippocampus %>% as.data.frame()
 rownames(deg_hip) <- make.unique(deg_hip$external_gene_name, sep = "_")
-EnhancedVolcano(deg_cortex, lab = rownames(deg_hip), x = 'log2FoldChange', y = 'padj',
-                pCutoff = 0.2, FCcutoff = 1.5, pointSize = 2, labSize = 5, 
+EnhancedVolcano(deg_hip, lab = rownames(deg_hip), x = 'log2FoldChange', y = 'padj',
+                pCutoff = 0.05, FCcutoff = 1.5, pointSize = 2, labSize = 5, 
                 col=c('black', 'black', 'black', 'red3'), 
                 colAlpha = 0.5,ylim = c(0,10),gridlines.minor=F,gridlines.major=F,
                 legendPosition = "none", titleLabSize = 0.01, subtitleLabSize=0.01)
 
 deg_spleen <- dds_list_LPS$spleen %>% as.data.frame()
 rownames(deg_spleen) <- make.unique(deg_spleen$external_gene_name, sep = "_")
-EnhancedVolcano(deg_cortex, lab = rownames(deg_spleen), x = 'log2FoldChange', y = 'padj',
-                pCutoff = 0.2, FCcutoff = 1.5, pointSize = 2, labSize = 5, 
+EnhancedVolcano(deg_spleen, lab = rownames(deg_spleen), x = 'log2FoldChange', y = 'padj',
+                pCutoff = 0.05, FCcutoff = 1.5, pointSize = 2, labSize = 5, 
                 col=c('black', 'black', 'black', 'red3'), 
                 colAlpha = 0.5,ylim = c(0,10),gridlines.minor=F,gridlines.major=F,
                 legendPosition = "none", titleLabSize = 0.01, subtitleLabSize=0.01)
@@ -181,7 +170,7 @@ EnhancedVolcano(deg_cortex, lab = rownames(deg_cortex), x = 'log2FoldChange', y 
 
 deg_hip <- dds_list_VNS$hippocampus %>% as.data.frame()
 rownames(deg_hip) <- make.unique(deg_hip$external_gene_name, sep = "_")
-EnhancedVolcano(deg_cortex, lab = rownames(deg_hip), x = 'log2FoldChange', y = 'padj',
+EnhancedVolcano(deg_hip, lab = rownames(deg_hip), x = 'log2FoldChange', y = 'padj',
                 pCutoff = 0.2, FCcutoff = 1.5, pointSize = 2, labSize = 5, 
                 col=c('black', 'black', 'black', 'red3'), 
                 colAlpha = 0.5,ylim = c(0,10),gridlines.minor=F,gridlines.major=F,
@@ -189,7 +178,7 @@ EnhancedVolcano(deg_cortex, lab = rownames(deg_hip), x = 'log2FoldChange', y = '
 
 deg_spleen <- dds_list_VNS$spleen %>% as.data.frame()
 rownames(deg_spleen) <- make.unique(deg_spleen$external_gene_name, sep = "_")
-EnhancedVolcano(deg_cortex, lab = rownames(deg_spleen), x = 'log2FoldChange', y = 'padj',
+EnhancedVolcano(deg_spleen, lab = rownames(deg_spleen), x = 'log2FoldChange', y = 'padj',
                 pCutoff = 0.2, FCcutoff = 1.5, pointSize = 2, labSize = 5, 
                 col=c('black', 'black', 'black', 'red3'), 
                 colAlpha = 0.5,ylim = c(0,10),gridlines.minor=F,gridlines.major=F,
@@ -198,6 +187,142 @@ EnhancedVolcano(deg_cortex, lab = rownames(deg_spleen), x = 'log2FoldChange', y 
 ```
 
 
+## Load filtered dds object + filter samples based on GEX & add extra metadata
+NEW: “to avoid inclusion of low-quality data, only transcripts with greater than 10 estimated counts in at least 50% of the samples were included in downstream DTE analysed”
+Excluded samples:
+-Cortex - 91 has a high rate of duplicates and 85, 87, 96 are more like each other than the others
+-Hippocampus - 98 has a high rate of duplicates
+-Spleen - 90 has a very low mean inner distance, potentially indicative of RNA degradation
 
+```{r treatmentDGE}
+setwd("/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/2025_GL_RatSeq/")
+dds <- readRDS("data/250903_filtered_annotated_dds.RDS")
+gene_names <- readRDS("data/250903_filtered_annotated_dds_geneNames.RDS") %>% 
+  filter(gene_biotype == "protein_coding") %>% 
+  dplyr::select(!c("gene_biotype"))
 
-Visualize top genes across the different conditions
+## Add metadata
+# clean up sample ID
+sampleIDs <- dds@colData$sample
+sampleIDs <- str_split_i(sampleIDs, "_", 2)
+sampleIDs <- gsub("[A-Z]","",sampleIDs)
+dds@colData$sampID = sampleIDs
+dds$sampID <- factor(dds$sampID, levels = unique(dds$sampID))
+
+# Add coldata on condition
+dds@colData$condition = paste0(dds@colData$treatment,"_", dds@colData$tissue)
+dds$condition <- factor(dds$condition, levels = unique(dds$condition))
+dds$condition <- relevel(dds$condition, ref = "CTRL_PNS")
+
+# Re-level treatment
+dds$treatment <- factor(dds$treatment, levels = unique(dds$treatment))
+dds$treatment <- relevel(dds$treatment, ref = "CTRL")
+design(dds) <- formula(~ treatment)
+
+## Split dds
+metadata <- colData(dds) %>% as.data.frame()
+dds_hip <- dds[, metadata$tissue == "hippocampus"]
+dds_cx <- dds[, metadata$tissue == "cortex"]
+dds_sp<- dds[, metadata$tissue == "PNS"]
+
+## Filter genes and add dds design
+dds_list <- list(dds_cx, dds_hip, dds_sp)
+names(dds_list) = c("cortex", "hippocampus", "spleen")
+dds_list <- lapply(dds_list, function(dds) dds[rowSums(counts(dds) > 10) >= (0.5*(ncol(dds))),])
+
+# saveRDS(dds_list,"/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/2025_GL_RatSeq/output/250929_filtered_dds_list_10exc.RDS")
+
+## Create function to create DEG dataframe
+dfpostDESeq <- function(dds, coefstring){
+  lfcShrink(dds, coef=coefstring,  type="apeglm") %>% as.data.frame() %>%
+    rownames_to_column("ensembl_gene_id") %>%
+    inner_join(gene_names, by = "ensembl_gene_id") %>%
+    relocate(external_gene_name, .before = "ensembl_gene_id") %>%
+    mutate(external_gene_name = ifelse(external_gene_name == "", ensembl_gene_id, external_gene_name))
+}
+
+## DESeq2 Analysis: LPS vs CTRL
+dds_list_LPS <- lapply(dds_list, function(dds) DESeq(dds))
+dds_list_LPS <- lapply(dds_list_LPS, function(dds) dfpostDESeq(dds, coefstring = "treatment_LPS_vs_CTRL")) 
+
+## DESeq2 Analysis: VNS vs LPS
+relevelFxn <- function(dds){
+  dds$treatment <- relevel(dds$treatment, ref = "LPS")
+  return(dds)
+}
+
+dds_list_VNS <- lapply(dds_list, function(dds) relevelFxn(dds))
+dds_list_VNS <- lapply(dds_list_VNS, function(dds) DESeq(dds))
+dds_list_VNS <- lapply(dds_list_VNS, function(dds) dfpostDESeq(dds, coefstring = "treatment_VNS_vs_LPS")) 
+
+# saveRDS(dds_list_LPS,"/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/2025_GL_RatSeq/output/250929_dds_list_deseq_LPS_10exc.RDS")
+# saveRDS(dds_list_VNS,"/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/2025_GL_RatSeq/output/250929_dds_list_deseq_VNS_10exc.RDS")
+
+```
+
+```{r visualization10exc}
+# Load lists
+dds_list_LPS <- readRDS("/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/2025_GL_RatSeq/output/250928_dds_list_deseq_LPS.RDS")
+dds_list_VNS <- readRDS("/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/2025_GL_RatSeq/output/250928_dds_list_deseq_VNS.RDS")
+
+# Set log2FC max to 10 and padj to 10 or lower
+graphMax <- function(dds){
+  dds <- dds %>% 
+    mutate(log2FoldChange = ifelse(log2FoldChange > 10, 10, ifelse(log2FoldChange < -10, -10, log2FoldChange))) %>%
+    mutate(padj = ifelse(padj < 10^-10, 10^-10, padj))
+  return(dds)
+}
+dds_list_LPS <- lapply(dds_list_LPS, function(dds) graphMax(dds))
+dds_list_VNS <- lapply(dds_list_VNS, function(dds) graphMax(dds))
+
+# Volcano plots for each (LPS)
+deg_cortex <- dds_list_LPS$cortex %>% as.data.frame()
+rownames(deg_cortex) <- make.unique(deg_cortex$external_gene_name, sep = "_")
+EnhancedVolcano(deg_cortex, lab = rownames(deg_cortex), x = 'log2FoldChange', y = 'padj',
+                pCutoff = 0.05, FCcutoff = 1.5, pointSize = 2, labSize = 5, 
+                col=c('black', 'black', 'black', 'red3'), 
+                colAlpha = 0.5,ylim = c(0,10),gridlines.minor=F,gridlines.major=F,
+                legendPosition = "none", titleLabSize = 0.01, subtitleLabSize=0.01)
+
+deg_hip <- dds_list_LPS$hippocampus %>% as.data.frame()
+rownames(deg_hip) <- make.unique(deg_hip$external_gene_name, sep = "_")
+EnhancedVolcano(deg_hip, lab = rownames(deg_hip), x = 'log2FoldChange', y = 'padj',
+                pCutoff = 0.05, FCcutoff = 1.5, pointSize = 2, labSize = 5, 
+                col=c('black', 'black', 'black', 'red3'), 
+                colAlpha = 0.5,ylim = c(0,10),gridlines.minor=F,gridlines.major=F,
+                legendPosition = "none", titleLabSize = 0.01, subtitleLabSize=0.01)
+
+deg_spleen <- dds_list_LPS$spleen %>% as.data.frame()
+rownames(deg_spleen) <- make.unique(deg_spleen$external_gene_name, sep = "_")
+EnhancedVolcano(deg_spleen, lab = rownames(deg_spleen), x = 'log2FoldChange', y = 'padj',
+                pCutoff = 0.05, FCcutoff = 1.5, pointSize = 2, labSize = 5, 
+                col=c('black', 'black', 'black', 'red3'), 
+                colAlpha = 0.5,ylim = c(0,10),gridlines.minor=F,gridlines.major=F,
+                legendPosition = "none", titleLabSize = 0.01, subtitleLabSize=0.01)
+
+# Volcano plots for each (VNS vs LPS)
+deg_cortex <- dds_list_VNS$cortex %>% as.data.frame()
+rownames(deg_cortex) <- make.unique(deg_cortex$external_gene_name, sep = "_")
+EnhancedVolcano(deg_cortex, lab = rownames(deg_cortex), x = 'log2FoldChange', y = 'padj',
+                pCutoff = 0.2, FCcutoff = 1.5, pointSize = 2, labSize = 5, 
+                col=c('black', 'black', 'black', 'red3'), 
+                colAlpha = 0.5,ylim = c(0,10),gridlines.minor=F,gridlines.major=F,
+                legendPosition = "none", titleLabSize = 0.01, subtitleLabSize=0.01)
+
+deg_hip <- dds_list_VNS$hippocampus %>% as.data.frame()
+rownames(deg_hip) <- make.unique(deg_hip$external_gene_name, sep = "_")
+EnhancedVolcano(deg_hip, lab = rownames(deg_hip), x = 'log2FoldChange', y = 'padj',
+                pCutoff = 0.2, FCcutoff = 1.5, pointSize = 2, labSize = 5, 
+                col=c('black', 'black', 'black', 'red3'), 
+                colAlpha = 0.5,ylim = c(0,10),gridlines.minor=F,gridlines.major=F,
+                legendPosition = "none", titleLabSize = 0.01, subtitleLabSize=0.01)
+
+deg_spleen <- dds_list_VNS$spleen %>% as.data.frame()
+rownames(deg_spleen) <- make.unique(deg_spleen$external_gene_name, sep = "_")
+EnhancedVolcano(deg_spleen, lab = rownames(deg_spleen), x = 'log2FoldChange', y = 'padj',
+                pCutoff = 0.2, FCcutoff = 1.5, pointSize = 2, labSize = 5, 
+                col=c('black', 'black', 'black', 'red3'), 
+                colAlpha = 0.5,ylim = c(0,10),gridlines.minor=F,gridlines.major=F,
+                legendPosition = "none", titleLabSize = 0.01, subtitleLabSize=0.01)
+
+```
