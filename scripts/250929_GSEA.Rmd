@@ -9,7 +9,7 @@ output: html_document
 ```{r packages}
 CRANpackages <- c("tidyverse", "ggplot2", "ggpubr", 
                   "ggstats","BiocManager","viridis",
-                  "gghighlight", "ggrepel","pheatmap","readxl")
+                  "gghighlight", "ggrepel","pheatmap","writexl")
 biocPackages <- c("apeglm", "DESeq2","limma", "biomaRt","fgsea")
 
 for(i in CRANpackages){
@@ -76,6 +76,7 @@ names(pathways.immune) <- str_to_title(names(pathways.immune))
 Using [FGSEA](https://stephenturner.github.io/deseq-to-fgsea/) package.
 
 ```{r LPSgsea}
+setwd("/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/2025_GL_RatSeq/")
 gsea <- function(dds_df, pathways.hallmark,pathways.reactome,pathways.go,pathways.immune){
   # Add test statistic & remove duplicates by averaging
   dds_df <- dds_df %>% mutate(stat = log2FoldChange/lfcSE) %>% 
@@ -114,6 +115,10 @@ dds_list_VNS_gsea <- lapply(dds_list_VNS, function(dds_df) gsea(dds_df, pathways
 
 # Filter VNS v LPS to padj < 0.2
 dds_list_VNS_gsea <- lapply(dds_list_VNS_gsea, function(x) lapply(x, function(y) y %>% filter(padj < 0.2)))
+# writexl::write_xlsx(list_flatten(dds_list_VNS_gsea, name_spec= "{outer}_{inner}"),
+#                     path = "output/250929_dds_list_VNS_gsea.xlsx", 
+#                     col_names = T, format_headers = T)
+
 
 # Graph SPLEEN
 dds_list_VNS_gsea$spleen$hallmark %>% as.data.frame() %>%
@@ -135,46 +140,12 @@ dds_list_VNS_gsea$spleen$immune %>% as.data.frame() %>%
   xlab("Normalized Enrichment Score") + 
   geom_col(fill = "#820000") + theme_classic() 
 
-dds_list_VNS_gsea_hip <- rbind(dds_list_VNS_gsea$hippocampus$reactome %>% mutate(patj))
+# Filter LPS v Ctrl to padj < 0.05
+# dds_list_LPS_gsea <- lapply(dds_list_LPS_gsea, function(x) lapply(x, function(y) y %>% filter(padj < 0.05)))
+# writexl::write_xlsx(list_flatten(dds_list_LPS_gsea, name_spec= "{outer}_{inner}"),
+#                     path = "output/250929_dds_list_LPS_gsea_p0.05.xlsx",
+#                     col_names = T, format_headers = T)
 
 
-# Merge results
-
-order_df <- fgsea_df %>% dplyr::select(HallmarkPathway,metaCol,NES) %>% 
-  pivot_wider(names_from = metaCol, values_from = NES) %>%
-  mutate(concordance = ifelse(sign(PNS) == sign(CNS), "Y","N"))
-
-sameSign = unique((order_df %>% filter(concordance == "Y") %>% arrange(-CNS))$HallmarkPathway)
-diffSign = unique((order_df %>% filter(concordance == "N") %>% arrange(-CNS))$HallmarkPathway) 
-
-fgsea_df %>% filter(HallmarkPathway %in% sameSign) %>%
-  mutate(HallmarkPathway = factor(HallmarkPathway, sameSign),
-         NES = ifelse(NES > 3, 3, ifelse(NES < -3, -3, NES))) %>%
-  ggplot(aes(x = metaCol, y = HallmarkPathway, fill = NES)) +
-  geom_tile(colour = "black") + 
-  theme_classic()+
-  ylab("")+ xlab("")+
-  theme(axis.text.y = element_text(color="black", family="Helvetica", size =10),
-        axis.text.x = element_text(angle = 30, hjust=1,
-                                   color="black", family="Helvetica", size =15),
-        axis.line = element_blank(), axis.ticks = element_blank(),
-        title = element_text(size = 10))+
-  scale_fill_gradient2(low="#364b9a",mid = "white",high = "#a50026",
-                       na.value = "#444444", midpoint=0,limits = c(-3, 3))
-
-fgsea_df %>% filter(HallmarkPathway %in% diffSign) %>%
-  mutate(HallmarkPathway = factor(HallmarkPathway, diffSign),
-         NES = ifelse(NES > 3, 3, ifelse(NES < -3, -3, NES))) %>%
-  ggplot(aes(x = metaCol, y = HallmarkPathway, fill = NES)) +
-  geom_tile(colour = "black") + 
-  theme_classic()+
-  ylab("")+ xlab("")+
-  theme(axis.text.y = element_text(color="black", family="Helvetica", size =10),
-        axis.text.x = element_text(angle = 30, hjust=1,
-                                   color="black", family="Helvetica", size =15),
-        axis.line = element_blank(), axis.ticks = element_blank(),
-        title = element_text(size = 10))+
-  scale_fill_gradient2(low="#364b9a",mid = "white",high = "#a50026",
-                       na.value = "#444444", midpoint=0,limits = c(-3, 3))
 
 ```

@@ -262,8 +262,8 @@ dds_list_VNS <- lapply(dds_list_VNS, function(dds) dfpostDESeq(dds, coefstring =
 
 ```{r visualization10exc}
 # Load lists
-dds_list_LPS <- readRDS("/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/2025_GL_RatSeq/output/250928_dds_list_deseq_LPS.RDS")
-dds_list_VNS <- readRDS("/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/2025_GL_RatSeq/output/250928_dds_list_deseq_VNS.RDS")
+dds_list_LPS <- readRDS("/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/2025_GL_RatSeq/output/250929_dds_list_deseq_LPS_10exc.RDS")
+dds_list_VNS <- readRDS("/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/2025_GL_RatSeq/output/250929_dds_list_deseq_VNS_10exc.RDS")
 
 # Set log2FC max to 10 and padj to 10 or lower
 graphMax <- function(dds){
