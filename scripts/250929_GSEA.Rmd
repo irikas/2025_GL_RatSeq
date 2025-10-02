@@ -38,13 +38,14 @@ setwd("/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/2
 
 ## dds objects
 dds_list_LPS <- readRDS("/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/2025_GL_RatSeq/output/250928_dds_list_deseq_LPS.RDS")
-dds_list_VNS <- readRDS("/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/2025_GL_RatSeq/output/250928_dds_list_deseq_VNS.RDS")
+dds_list_VNS_LPS <- readRDS("/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/2025_GL_RatSeq/output/250928_dds_list_deseq_VNS_LPS.RDS")
+dds_list_VNS_Ctrl <- readRDS("/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/2025_GL_RatSeq/output/250930_dds_list_deseq_VNS_Ctrl.RDS")
 
 ## Pathways
-pathways.hallmark <- gmtPathways("pathways/mh.all.hallmark.v2025.1.Mm.symbols.gmt")
-pathways.reactome <- gmtPathways("pathways/m2.cp.reactome.v2025.1.Mm.symbols.gmt")
-pathways.go <- gmtPathways("pathways/m5.go.v2025.1.Mm.symbols.gmt")
-pathways.immune <- gmtPathways("pathways/m7.all.immune.v2025.1.Mm.symbols.gmt")
+pathways.hallmark <- gmtPathways("scripts/pathways/mh.all.hallmark.v2025.1.Mm.symbols.gmt")
+pathways.reactome <- gmtPathways("scripts/pathways/m2.cp.reactome.v2025.1.Mm.symbols.gmt")
+pathways.go <- gmtPathways("scripts/pathways/m5.go.v2025.1.Mm.symbols.gmt")
+pathways.immune <- gmtPathways("scripts/pathways/m7.all.immune.v2025.1.Mm.symbols.gmt")
 
 ```
 
@@ -108,33 +109,34 @@ gsea <- function(dds_df, pathways.hallmark,pathways.reactome,pathways.go,pathway
 }
 
 dds_list_LPS_gsea <- lapply(dds_list_LPS, function(dds_df) gsea(dds_df, pathways.hallmark,pathways.reactome,pathways.go,pathways.immune))
-dds_list_VNS_gsea <- lapply(dds_list_VNS, function(dds_df) gsea(dds_df, pathways.hallmark,pathways.reactome,pathways.go,pathways.immune))
+dds_list_VNS_LPS_gsea <- lapply(dds_list_VNS_LPS, function(dds_df) gsea(dds_df, pathways.hallmark,pathways.reactome,pathways.go,pathways.immune))
+dds_list_VNS_Ctrl_gsea <- lapply(dds_list_VNS_Ctrl, function(dds_df) gsea(dds_df, pathways.hallmark,pathways.reactome,pathways.go,pathways.immune))
 
 # saveRDS(dds_list_LPS_gsea,"output/250929_dds_list_LPS_gsea.RDS")
 # saveRDS(dds_list_VNS_gsea,"output/250929_dds_list_VNS_gsea.RDS")
 
 # Filter VNS v LPS to padj < 0.2
-dds_list_VNS_gsea <- lapply(dds_list_VNS_gsea, function(x) lapply(x, function(y) y %>% filter(padj < 0.2)))
+dds_list_VNS_LPS_gsea <- lapply(dds_list_VNS_LPS_gsea, function(x) lapply(x, function(y) y %>% filter(padj < 0.2)))
 # writexl::write_xlsx(list_flatten(dds_list_VNS_gsea, name_spec= "{outer}_{inner}"),
 #                     path = "output/250929_dds_list_VNS_gsea.xlsx", 
 #                     col_names = T, format_headers = T)
 
 
 # Graph SPLEEN
-dds_list_VNS_gsea$spleen$hallmark %>% as.data.frame() %>%
+dds_list_VNS_LPS_gsea$spleen$hallmark %>% as.data.frame() %>%
   mutate(color = ifelse(padj < 0.05, "padj < 0.05", "0.05 < padj < 0.2")) %>%
-  ggplot(aes(x = NES, y = pathway)) + ylab("") + 
+  ggplot(aes(x = NES, y = pathway, fill = color)) + ylab("") + 
   xlab("Normalized Enrichment Score") + 
   geom_col() + theme_classic() +
   scale_fill_manual(values = c("black", "#820000"))
 
-dds_list_VNS_gsea$spleen$go %>% as.data.frame() %>%
+dds_list_VNS_LPS_gsea$spleen$go %>% as.data.frame() %>%
   filter(padj < 0.05) %>%
   ggplot(aes(x = NES, y = pathway)) + ylab("") + 
   xlab("Normalized Enrichment Score") + 
   geom_col(fill = "#820000") + theme_classic() 
   
-dds_list_VNS_gsea$spleen$immune %>% as.data.frame() %>%
+dds_list_VNS_LPS_gsea$spleen$immune %>% as.data.frame() %>%
   filter(padj < 0.05) %>%
   ggplot(aes(x = NES, y = pathway)) + ylab("") + 
   xlab("Normalized Enrichment Score") + 

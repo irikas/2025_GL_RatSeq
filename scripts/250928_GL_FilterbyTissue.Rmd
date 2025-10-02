@@ -99,18 +99,23 @@ dfpostDESeq <- function(dds, coefstring){
 dds_list_LPS <- lapply(dds_list, function(dds) DESeq(dds))
 dds_list_LPS <- lapply(dds_list_LPS, function(dds) dfpostDESeq(dds, coefstring = "treatment_LPS_vs_CTRL")) 
 
+## DESeq2 Analysis: VNS vs CTRL
+dds_list_VNS_Ctrl <- lapply(dds_list, function(dds) DESeq(dds))
+dds_list_VNS_Ctrl <- lapply(dds_list_VNS, function(dds) dfpostDESeq(dds, coefstring = "treatment_LPS_vs_CTRL")) 
+
 ## DESeq2 Analysis: VNS vs LPS
 relevelFxn <- function(dds){
   dds$treatment <- relevel(dds$treatment, ref = "LPS")
   return(dds)
 }
 
-dds_list_VNS <- lapply(dds_list, function(dds) relevelFxn(dds))
-dds_list_VNS <- lapply(dds_list_VNS, function(dds) DESeq(dds))
-dds_list_VNS <- lapply(dds_list_VNS, function(dds) dfpostDESeq(dds, coefstring = "treatment_VNS_vs_LPS")) 
+dds_list_VNS_LPS <- lapply(dds_list, function(dds) relevelFxn(dds))
+dds_list_VNS_LPS <- lapply(dds_list_VNS_LPS, function(dds) DESeq(dds))
+dds_list_VNS_LPS <- lapply(dds_list_VNS_LPS, function(dds) dfpostDESeq(dds, coefstring = "treatment_VNS_vs_LPS")) 
 
 # saveRDS(dds_list_LPS,"/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/2025_GL_RatSeq/output/250928_dds_list_deseq_LPS.RDS")
-# saveRDS(dds_list_VNS,"/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/2025_GL_RatSeq/output/250928_dds_list_deseq_VNS.RDS")
+# saveRDS(dds_list_VNS_LPS,"/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/2025_GL_RatSeq/output/250928_dds_list_deseq_VNS_LPS.RDS")
+# saveRDS(dds_list_VNS_Ctrl,"/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/2025_GL_RatSeq/output/250930_dds_list_deseq_VNS_Ctrl.RDS")
 
 ```
 
@@ -131,7 +136,8 @@ graphMax <- function(dds){
   return(dds)
 }
 dds_list_LPS <- lapply(dds_list_LPS, function(dds) graphMax(dds))
-dds_list_VNS <- lapply(dds_list_VNS, function(dds) graphMax(dds))
+dds_list_VNS_LPS <- lapply(dds_list_VNS_LPS, function(dds) graphMax(dds))
+dds_list_VNS_Ctrl <- lapply(dds_list_VNS_Ctrl, function(dds) graphMax(dds))
 
 # Volcano plots for each (LPS)
 deg_cortex <- dds_list_LPS$cortex %>% as.data.frame()
