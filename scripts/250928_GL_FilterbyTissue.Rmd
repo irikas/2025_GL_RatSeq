@@ -331,4 +331,60 @@ EnhancedVolcano(deg_spleen, lab = rownames(deg_spleen), x = 'log2FoldChange', y 
                 colAlpha = 0.5,ylim = c(0,10),gridlines.minor=F,gridlines.major=F,
                 legendPosition = "none", titleLabSize = 0.01, subtitleLabSize=0.01)
 
+## Check expression of genes of interest
+genes <- c("Nlrp3","Nfkb1", "Nfkb2","Il1a", "Il1b","Aif1", "Casp1")
+df_plot <- rbind(rbind(dds_list_LPS$cortex %>% mutate(tissue = "cortex"),
+                 dds_list_LPS$hippocampus %>% mutate(tissue = "hippocampus")),
+                 dds_list_LPS$spleen %>% mutate(tissue = "spleen")) %>%
+  mutate(pLabel = ifelse(padj < 0.001, "***", 
+                         ifelse(padj < 0.01, "**", 
+                                ifelse(padj < 0.05, "*", ""))),
+         labelC = ifelse(log2FoldChange > 0, "black", "white")) %>%
+  filter(external_gene_name %in% genes) %>%
+  mutate(external_gene_name = ifelse(external_gene_name == "Aif1", "Iba1", external_gene_name))
+
+df_plot %>%
+  mutate(log2FoldChange = ifelse(log2FoldChange > 2, 2, ifelse(log2FoldChange < -2, -2, log2FoldChange))) %>%
+  ggplot(aes(x=factor(external_gene_name, levels = str_sort(unique(df_plot$external_gene_name), decreasing = T)), 
+             y = tissue, fill = log2FoldChange)) +
+  geom_tile(color = "white", linewidth = 2) +theme_classic() +
+  theme(text =  element_text(color = "black"),
+        axis.line = element_blank(), 
+        axis.ticks = element_blank())+
+  scale_y_discrete(expand = c(0,0))+
+  scale_fill_gradient2(low = "#083D77", mid = "white", high = "#820000", limits = c(-2,2))+
+  # scale_fill_viridis_c(option="A", limits = c(-2,2))+
+  ylab("") + xlab("") +
+  geom_text(aes(label = pLabel), color = "black", size = 10)+
+  coord_flip()
+  
+df_plot <- rbind(rbind(dds_list_VNS_Ctrl$cortex %>% mutate(tissue = "cortex"),
+                 dds_list_VNS_Ctrl$hippocampus %>% mutate(tissue = "hippocampus")),
+                 dds_list_VNS_Ctrl$spleen %>% mutate(tissue = "spleen")) %>%
+  mutate(pLabel = ifelse(padj < 0.001, "***", 
+                         ifelse(padj < 0.01, "**", 
+                                ifelse(padj < 0.05, "*", ""))),
+         labelC = ifelse(log2FoldChange > 0, "black", "white")) %>%
+  filter(external_gene_name %in% genes) %>%
+  mutate(external_gene_name = ifelse(external_gene_name == "Aif1", "Iba1", external_gene_name))
+
+df_plot %>%
+  mutate(log2FoldChange = ifelse(log2FoldChange > 2, 2, ifelse(log2FoldChange < -2, -2, log2FoldChange))) %>%
+  ggplot(aes(x=factor(external_gene_name, levels = str_sort(unique(df_plot$external_gene_name), decreasing = T)), 
+             y = tissue, fill = log2FoldChange)) +
+  geom_tile(color = "white", linewidth = 2) +theme_classic() +
+  theme(text =  element_text(color = "black"),
+        axis.line = element_blank(), 
+        axis.ticks = element_blank())+
+  scale_y_discrete(expand = c(0,0))+
+  scale_fill_gradient2(low = "#083D77", mid = "white", high = "#820000", limits = c(-2,2))+
+  # scale_fill_viridis_c(option="A", limits = c(-2,2))+
+  ylab("") + xlab("") +
+  geom_text(aes(label = pLabel), color = "black", size = 10)+
+  coord_flip()
+  
+
+
+
+
 ```
