@@ -19,7 +19,7 @@ The purpose of this script is to analyze rat Cx, Hip, and Spleen tissues for res
 CRANpackages <- c("tidyverse", "ggplot2", "ggpubr", 
                   "ggstats","BiocManager","viridis",
                   "gghighlight", "ggrepel","pheatmap","readxl", 
-                  "RColorBrewer")
+                  "RColorBrewer", "ggvenn","UpSetR")
 biocPackages <- c("apeglm", "DESeq2","limma", "biomaRt","fgsea", "EnhancedVolcano")
 
 for(i in CRANpackages){
@@ -331,8 +331,30 @@ EnhancedVolcano(deg_spleen, lab = rownames(deg_spleen), x = 'log2FoldChange', y 
                 colAlpha = 0.5,ylim = c(0,10),gridlines.minor=F,gridlines.major=F,
                 legendPosition = "none", titleLabSize = 0.01, subtitleLabSize=0.01)
 
+## Venn Diagram / Upset plots for LPS vs Ctrl by tissue
+geneList_sigLPS <- lapply(dds_list_LPS, function(x) x %>% filter(padj < 0.05))
+geneList_sigLPS <- list(cortex = geneList_sigLPS$cortex$external_gene_name,
+                        hippocampus = geneList_sigLPS$hippocampus$external_gene_name,
+                        spleen = geneList_sigLPS$spleen$external_gene_name)
+ggvenn(
+  geneList_sigLPS, 
+  fill_color = c("#1B2845", "#7699D4", "#FDCA40"),
+  stroke_size = 0.5, set_name_size = 4, fill_alpha= 0.5,
+  text_size = 4, show_stats = "none")
+
+upset(fromList(geneList_sigLPS),  main.bar.color = 'black', matrix.color = "black",
+      sets.bar.color = 'black', order.by = "freq",
+      empty.intersections = "on", set_size.show = FALSE,
+      intersections = list(list("cortex", "hippocampus"),
+                           list("cortex", "spleen"),
+                           list("spleen", "hippocampus"),
+                           list("spleen", "cortex", "hippocampus")), 
+      show.numbers="no",
+      mb.ratio = c(0.8,0.2),  line.size = 1.4, point.size=4.4,mainbar.y.max = 150)
+
 ## Check expression of genes of interest
-genes <- c("Nlrp3","Nfkb1", "Nfkb2","Il1a", "Il1b","Aif1", "Casp1")
+# str_subset(string = gene_names$external_gene_name,pattern = "Rela")
+genes <- c("Nlrp3","Nfkb1", "Nfkb2","Il1a", "Il1b","Aif1", "Casp1", "Rela")
 df_plot <- rbind(rbind(dds_list_LPS$cortex %>% mutate(tissue = "cortex"),
                  dds_list_LPS$hippocampus %>% mutate(tissue = "hippocampus")),
                  dds_list_LPS$spleen %>% mutate(tissue = "spleen")) %>%
@@ -358,9 +380,9 @@ df_plot %>%
   geom_text(aes(label = pLabel), color = "black", size = 10)+
   coord_flip()
   
-df_plot <- rbind(rbind(dds_list_VNS_Ctrl$cortex %>% mutate(tissue = "cortex"),
-                 dds_list_VNS_Ctrl$hippocampus %>% mutate(tissue = "hippocampus")),
-                 dds_list_VNS_Ctrl$spleen %>% mutate(tissue = "spleen")) %>%
+df_plot <- rbind(rbind(dds_list_VNS_LPS$cortex %>% mutate(tissue = "cortex"),
+                 dds_list_VNS_LPS$hippocampus %>% mutate(tissue = "hippocampus")),
+                 dds_list_VNS_LPS$spleen %>% mutate(tissue = "spleen")) %>%
   mutate(pLabel = ifelse(padj < 0.001, "***", 
                          ifelse(padj < 0.01, "**", 
                                 ifelse(padj < 0.05, "*", ""))),
@@ -377,8 +399,8 @@ df_plot %>%
         axis.line = element_blank(), 
         axis.ticks = element_blank())+
   scale_y_discrete(expand = c(0,0))+
-  scale_fill_gradient2(low = "#083D77", mid = "white", high = "#820000", limits = c(-2,2))+
-  # scale_fill_viridis_c(option="A", limits = c(-2,2))+
+  #scale_fill_gradient2(low = "#083D77", mid = "white", high = "#820000", limits = c(-2,2))+
+   scale_fill_viridis_c(option="A", limits = c(-2,2))+
   ylab("") + xlab("") +
   geom_text(aes(label = pLabel), color = "black", size = 10)+
   coord_flip()
