@@ -288,7 +288,8 @@ EnhancedVolcano(deg_cortex, lab = rownames(deg_cortex), x = 'log2FoldChange', y 
                 pCutoff = 0.05, FCcutoff = 1.5, pointSize = 2, labSize = 5, 
                 col=c('black', 'black', 'black', 'red3'), 
                 colAlpha = 0.5,ylim = c(0,10),gridlines.minor=F,gridlines.major=F,
-                legendPosition = "none", titleLabSize = 0.01, subtitleLabSize=0.01)
+                legendPosition = "none", titleLabSize = 0.01, subtitleLabSize=0.01,
+                xlim = c(-2,5))
 
 deg_hip <- dds_list_LPS$hippocampus %>% as.data.frame()
 rownames(deg_hip) <- make.unique(deg_hip$external_gene_name, sep = "_")
@@ -296,7 +297,8 @@ EnhancedVolcano(deg_hip, lab = rownames(deg_hip), x = 'log2FoldChange', y = 'pad
                 pCutoff = 0.05, FCcutoff = 1.5, pointSize = 2, labSize = 5, 
                 col=c('black', 'black', 'black', 'red3'), 
                 colAlpha = 0.5,ylim = c(0,10),gridlines.minor=F,gridlines.major=F,
-                legendPosition = "none", titleLabSize = 0.01, subtitleLabSize=0.01)
+                legendPosition = "none", titleLabSize = 0.01, subtitleLabSize=0.01,
+                xlim=c(-1,7))
 
 deg_spleen <- dds_list_LPS$spleen %>% as.data.frame()
 rownames(deg_spleen) <- make.unique(deg_spleen$external_gene_name, sep = "_")
@@ -311,7 +313,7 @@ deg_cortex <- dds_list_VNS$cortex %>% as.data.frame()
 rownames(deg_cortex) <- make.unique(deg_cortex$external_gene_name, sep = "_")
 EnhancedVolcano(deg_cortex, lab = rownames(deg_cortex), x = 'log2FoldChange', y = 'padj',
                 pCutoff = 0.2, FCcutoff = 1.5, pointSize = 2, labSize = 5, 
-                col=c('black', 'black', 'black', 'red3'), 
+                col=c('black', 'black', 'black', 'red3'), xlim = c(-2,2),
                 colAlpha = 0.5,ylim = c(0,10),gridlines.minor=F,gridlines.major=F,
                 legendPosition = "none", titleLabSize = 0.01, subtitleLabSize=0.01)
 
@@ -319,7 +321,7 @@ deg_hip <- dds_list_VNS$hippocampus %>% as.data.frame()
 rownames(deg_hip) <- make.unique(deg_hip$external_gene_name, sep = "_")
 EnhancedVolcano(deg_hip, lab = rownames(deg_hip), x = 'log2FoldChange', y = 'padj',
                 pCutoff = 0.2, FCcutoff = 1.5, pointSize = 2, labSize = 5, 
-                col=c('black', 'black', 'black', 'red3'), 
+                col=c('black', 'black', 'black', 'red3'), xlim = c(-2,2),
                 colAlpha = 0.5,ylim = c(0,10),gridlines.minor=F,gridlines.major=F,
                 legendPosition = "none", titleLabSize = 0.01, subtitleLabSize=0.01)
 
@@ -332,6 +334,7 @@ EnhancedVolcano(deg_spleen, lab = rownames(deg_spleen), x = 'log2FoldChange', y 
                 legendPosition = "none", titleLabSize = 0.01, subtitleLabSize=0.01)
 
 ## Venn Diagram / Upset plots for LPS vs Ctrl by tissue
+# Note - RT1-T24-4 is repeated bc it has two ENSNOG #s
 geneList_sigLPS <- lapply(dds_list_LPS, function(x) x %>% filter(padj < 0.05))
 geneList_sigLPS <- list(cortex = geneList_sigLPS$cortex$external_gene_name,
                         hippocampus = geneList_sigLPS$hippocampus$external_gene_name,
@@ -340,17 +343,24 @@ ggvenn(
   geneList_sigLPS, 
   fill_color = c("#1B2845", "#7699D4", "#FDCA40"),
   stroke_size = 0.5, set_name_size = 4, fill_alpha= 0.5,
-  text_size = 4, show_stats = "none")
+  text_size = 4, show_stats = "cp")
+
+ggvenn(
+  geneList_sigLPS[c(1,2)], 
+  fill_color = c("#1B2845", "#7699D4"),
+  stroke_size = 0.5, set_name_size = 4, fill_alpha= 0.5,
+  text_size = 4, show_stats = "none", auto_scale = T)
 
 upset(fromList(geneList_sigLPS),  main.bar.color = 'black', matrix.color = "black",
       sets.bar.color = 'black', order.by = "freq",
       empty.intersections = "on", set_size.show = FALSE,
       intersections = list(list("cortex", "hippocampus"),
-                           list("cortex", "spleen"),
-                           list("spleen", "hippocampus"),
-                           list("spleen", "cortex", "hippocampus")), 
-      show.numbers="no",
-      mb.ratio = c(0.8,0.2),  line.size = 1.4, point.size=4.4,mainbar.y.max = 150)
+                           #list("cortex", "spleen"),
+                           #list("spleen", "hippocampus"),
+                           #list("spleen", "cortex", "hippocampus"),
+                           list("cortex"),
+                           list("hippocampus")), 
+      show.numbers="no",  line.size = 1.4, point.size=4.4, mainbar.y.max = 250)
 
 ## Check expression of genes of interest
 # str_subset(string = gene_names$external_gene_name,pattern = "Rela")
