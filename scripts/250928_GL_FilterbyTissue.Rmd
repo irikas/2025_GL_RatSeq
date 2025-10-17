@@ -314,7 +314,7 @@ rownames(deg_cortex) <- make.unique(deg_cortex$external_gene_name, sep = "_")
 EnhancedVolcano(deg_cortex, lab = rownames(deg_cortex), x = 'log2FoldChange', y = 'padj',
                 pCutoff = 0.2, FCcutoff = 1.5, pointSize = 2, labSize = 5, 
                 col=c('black', 'black', 'black', 'red3'), xlim = c(-2,2),
-                colAlpha = 0.5,ylim = c(0,10),gridlines.minor=F,gridlines.major=F,
+                colAlpha = 0.5,ylim = c(0,5),gridlines.minor=F,gridlines.major=F,
                 legendPosition = "none", titleLabSize = 0.01, subtitleLabSize=0.01)
 
 deg_hip <- dds_list_VNS$hippocampus %>% as.data.frame()
@@ -322,7 +322,7 @@ rownames(deg_hip) <- make.unique(deg_hip$external_gene_name, sep = "_")
 EnhancedVolcano(deg_hip, lab = rownames(deg_hip), x = 'log2FoldChange', y = 'padj',
                 pCutoff = 0.2, FCcutoff = 1.5, pointSize = 2, labSize = 5, 
                 col=c('black', 'black', 'black', 'red3'), xlim = c(-2,2),
-                colAlpha = 0.5,ylim = c(0,10),gridlines.minor=F,gridlines.major=F,
+                colAlpha = 0.5,ylim = c(0,5),gridlines.minor=F,gridlines.major=F,
                 legendPosition = "none", titleLabSize = 0.01, subtitleLabSize=0.01)
 
 deg_spleen <- dds_list_VNS$spleen %>% as.data.frame()
