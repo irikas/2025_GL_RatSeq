@@ -335,7 +335,7 @@ EnhancedVolcano(deg_spleen, lab = rownames(deg_spleen), x = 'log2FoldChange', y 
 
 ## Venn Diagram / Upset plots for LPS vs Ctrl by tissue
 # Note - RT1-T24-4 is repeated bc it has two ENSNOG #s
-geneList_sigLPS <- lapply(dds_list_LPS, function(x) x %>% filter(padj < 0.05))
+geneList_sigLPS <- lapply(dds_list_LPS, function(x) x %>% filter(padj < 0.05, log2FoldChange > 1.5))
 geneList_sigLPS <- list(cortex = geneList_sigLPS$cortex$external_gene_name,
                         hippocampus = geneList_sigLPS$hippocampus$external_gene_name,
                         spleen = geneList_sigLPS$spleen$external_gene_name)
@@ -349,7 +349,7 @@ ggvenn(
   geneList_sigLPS[c(1,2)], 
   fill_color = c("#1B2845", "#7699D4"),
   stroke_size = 0.5, set_name_size = 4, fill_alpha= 0.5,
-  text_size = 4, show_stats = "none", auto_scale = T)
+  text_size = 4, show_stats = "c", auto_scale = T)
 
 upset(fromList(geneList_sigLPS),  main.bar.color = 'black', matrix.color = "black",
       sets.bar.color = 'black', order.by = "freq",

@@ -33,19 +33,36 @@ rm(CRANpackages,biocPackages)
 ```
 
 ## Files
+
+Brain from here: https://www.sciencedirect.com/science/article/pii/S2215016124002413
 ```{r Files}
 setwd("/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/2025_GL_RatSeq/")
 
 ## dds objects
-dds_list_LPS <- readRDS("/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/2025_GL_RatSeq/output/250928_dds_list_deseq_LPS.RDS")
-dds_list_VNS_LPS <- readRDS("/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/2025_GL_RatSeq/output/250928_dds_list_deseq_VNS_LPS.RDS")
-dds_list_VNS_Ctrl <- readRDS("/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/2025_GL_RatSeq/output/250930_dds_list_deseq_VNS_Ctrl.RDS")
+dds_list_LPS <- readRDS("/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/2025_GL_RatSeq/output/250929_dds_list_deseq_LPS_10exc.RDS")
+dds_list_VNS_LPS <- readRDS("/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/2025_GL_RatSeq/output/250929_dds_list_deseq_VNS_10exc.RDS")
+# dds_list_VNS_Ctrl <- readRDS("/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/2025_GL_RatSeq/output/250930_dds_list_deseq_VNS_Ctrl.RDS")
 
 ## Pathways
 pathways.hallmark <- gmtPathways("scripts/pathways/mh.all.hallmark.v2025.1.Mm.symbols.gmt")
 pathways.reactome <- gmtPathways("scripts/pathways/m2.cp.reactome.v2025.1.Mm.symbols.gmt")
 pathways.go <- gmtPathways("scripts/pathways/m5.go.v2025.1.Mm.symbols.gmt")
+pathways.go.mol <- gmtPathways("scripts/pathways/m5.go.molfx.v2025.1.Mm.symbols.gmt")
+pathways.go.cell <- gmtPathways("scripts/pathways/m5.go.cellcomp.v2025.1.Mm.symbols.gmt")
+pathways.go.bio <- gmtPathways("scripts/pathways/m5.go.biop.v2025.1.Mm.symbols.gmt")
 pathways.immune <- gmtPathways("scripts/pathways/m7.all.immune.v2025.1.Mm.symbols.gmt")
+BrainGMT<-gmtPathways("/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/2025_GL_RatSeq/scripts/pathways/BrainGMTv2_RatOrthologs.gmt.txt")
+
+## Custom pathways
+pathways_GL <- read.csv("/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/2025_GL_RatSeq/data/vns_prioritized_pathways.csv")
+pathways.custom <- list()
+
+
+for(i in 1:nrow(pathways_GL)){
+  pathways.custom[pathways_GL$Pathway[i]] = list(str_to_title(unlist(str_split(pathways_GL$Genes[i], ", "))))
+  rm(i)
+}
+rm(pathways_GL)
 
 ```
 
@@ -67,20 +84,52 @@ names(pathways.go) <- gsub("GOBP_",replacement = "", x = names(pathways.go))
 names(pathways.go) <- gsub("_", replacement = " ", x = names(pathways.go))
 names(pathways.go) <- str_to_title(names(pathways.go))
 
+#GOBP
+names(pathways.go.bio) <- gsub("GOBP_",replacement = "", x = names(pathways.go.bio))
+names(pathways.go.bio) <- gsub("_", replacement = " ", x = names(pathways.go.bio))
+names(pathways.go.bio) <- str_to_title(names(pathways.go.bio))
+
+#GOCC
+names(pathways.go.cell) <- gsub("GOCC_",replacement = "", x = names(pathways.go.cell))
+names(pathways.go.cell) <- gsub("_", replacement = " ", x = names(pathways.go.cell))
+names(pathways.go.cell) <- str_to_title(names(pathways.go.cell))
+
+#GO
+names(pathways.go.mol) <- gsub("GOMF_",replacement = "", x = names(pathways.go.mol))
+names(pathways.go.mol) <- gsub("_", replacement = " ", x = names(pathways.go.mol))
+names(pathways.go.mol) <- str_to_title(names(pathways.go.mol))
+
 #Immune
 names(pathways.immune) <- gsub("CUI_",replacement = "", x = names(pathways.immune))
 names(pathways.immune) <- gsub("_", replacement = " ", x = names(pathways.immune))
 names(pathways.immune) <- str_to_title(names(pathways.immune))
 
+# Filter BrainGMT to remove blanks
+BrainGMT_clean <- lapply(BrainGMT, function(x) x[x != ""])
+
+## Pathway list
+pathways <- list("hallmark" = pathways.hallmark, "reactome" = pathways.reactome,
+                 "go" = pathways.go, "gobp" = pathways.go.bio, 
+                 "gocc" = pathways.go.cell, "gomf" = pathways.go.mol,
+                 "immune" = pathways.immune, "custom" = pathways.custom, 
+                 "Hagenaeur_Brain" = BrainGMT_clean)
+
+rm(pathways.hallmark, pathways.reactome,
+   pathways.go, pathways.go.bio, 
+   pathways.go.cell,pathways.go.mol,
+   pathways.immune, pathways.custom,
+   BrainGMT)
+
+#saveRDS(pathways, "/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/2025_GL_RatSeq/data/251031_Pathways.RDS")
 
 ```
 
 ## GSEA for all treatments
 Using [FGSEA](https://stephenturner.github.io/deseq-to-fgsea/) package.
 
-```{r LPSgsea}
+```{r LPSgsea, eval = FALSE}
 setwd("/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/2025_GL_RatSeq/")
-gsea <- function(dds_df, pathways.hallmark,pathways.reactome,pathways.go,pathways.immune){
+gsea <- function(dds_df, pathways){
   # Add test statistic & remove duplicates by averaging
   dds_df <- dds_df %>% mutate(stat = log2FoldChange/lfcSE) %>% 
     dplyr::select(external_gene_name, stat) %>% 
@@ -94,141 +143,286 @@ gsea <- function(dds_df, pathways.hallmark,pathways.reactome,pathways.go,pathway
   ranks <- deframe(dds_df)
   
   # conduct GSEA
-  fgsea_df_hallmark <- fgsea(pathways=pathways.hallmark, stats=ranks) %>% 
-    dplyr::select(-leadingEdge, -ES) 
-  fgsea_df_reactome <- fgsea(pathways=pathways.reactome, stats=ranks) %>% 
-    dplyr::select(-leadingEdge, -ES) 
-  fgsea_df_go <- fgsea(pathways=pathways.go, stats=ranks) %>% 
-    dplyr::select(-leadingEdge, -ES) 
-  fgsea_df_immune <- fgsea(pathways=pathways.immune, stats=ranks) %>% 
-    dplyr::select(-leadingEdge, -ES) 
+  fgsea_df <- lapply(pathways, function(x) fgsea(pathways = x, 
+                                                 stat = ranks, 
+                                                 minSize = 5,
+                                                 maxSize = 500) %>%
+                       dplyr::select(-leadingEdge, -ES))
   
   # create list
-  fgseaList <- list(fgsea_df_hallmark,fgsea_df_reactome,fgsea_df_go,fgsea_df_immune)
-  names(fgseaList) <- c("hallmark", "reactome", "go", "immune")
+  names(fgsea_df) <- names(pathways)
   
-  return(fgseaList)
+  return(fgsea_df)
 }
 
-dds_list_LPS_gsea <- lapply(dds_list_LPS, function(dds_df) gsea(dds_df, pathways.hallmark,pathways.reactome,pathways.go,pathways.immune))
-dds_list_VNS_LPS_gsea <- lapply(dds_list_VNS_LPS, function(dds_df) gsea(dds_df, pathways.hallmark,pathways.reactome,pathways.go,pathways.immune))
-dds_list_VNS_Ctrl_gsea <- lapply(dds_list_VNS_Ctrl, function(dds_df) gsea(dds_df, pathways.hallmark,pathways.reactome,pathways.go,pathways.immune))
+dds_list_LPS_Ctrl_gsea <- lapply(dds_list_LPS, function(dds_df) gsea(dds_df, pathways))
+dds_list_VNS_LPS_gsea <- lapply(dds_list_VNS_LPS, function(dds_df) gsea(dds_df, pathways))
 
-# saveRDS(dds_list_LPS_gsea,"output/250929_dds_list_LPS_gsea.RDS")
-# saveRDS(dds_list_VNS_LPS_gsea,"output/250929_dds_list_VNS_LPS_gsea.RDS")
-# saveRDS(dds_list_VNS_Ctrl_gsea,"output/250929_dds_list_VNS_Ctrl_gsea.RDS")
+# saveRDS(dds_list_LPS_Ctrl_gsea,"output/251016_dds_list_LPS_gsea.RDS")
+# saveRDS(dds_list_VNS_LPS_gsea,"output/251016_dds_list_VNS_LPS_gsea.RDS")
+
+```
+```{r writeXL, eval=FALSE}
+setwd("/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/2025_GL_RatSeq/")
+# Load files
+dds_list_LPS_Ctrl_gsea <- readRDS("output/251016_dds_list_LPS_gsea.RDS")
+dds_list_VNS_LPS_gsea <- readRDS("output/251016_dds_list_VNS_LPS_gsea.RDS")
+
+## LPS
+# Flatten 2-level nested list
+flat_list <- lapply(names(dds_list_LPS_Ctrl_gsea), function(outer) {
+  inner_list <- dds_list_LPS_Ctrl_gsea[[outer]]
+  setNames(inner_list, paste0(outer, "_", names(inner_list)))
+}) |> unlist(recursive = FALSE)
+
+# Write all to Excel
+write_xlsx(flat_list, "output/251016_dds_list_LPS_Ctrl_gsea.xlsx")
+
+## VNS
+# Flatten 2-level nested list
+flat_list <- lapply(names(dds_list_VNS_LPS_gsea), function(outer) {
+  inner_list <- dds_list_VNS_LPS_gsea[[outer]]
+  setNames(inner_list, paste0(outer, "_", names(inner_list)))
+}) |> unlist(recursive = FALSE)
+
+# Write all to Excel
+write_xlsx(flat_list, "output/251016_dds_list_VNS_LPS_gsea.xlsx")
+
+
 
 ```
 
-Plot values
-```{r Plots}
+Plot values (Spleen)
+```{r SpleenPlots}
+setwd("/Users/irika/Library/CloudStorage/OneDrive-JohnsHopkins/WongLing/Others/250601_GL/2025_GL_RatSeq/")
+
+# Load files for spleen
+dds_list_LPS_Ctrl_gsea <- readRDS("output/251015_dds_list_LPS_gsea.RDS")
+dds_list_VNS_LPS_gsea <- readRDS("output/251015_dds_list_VNS_LPS_gsea.RDS")
+
+## LPS vs Ctrl (standard treatment) 
+dds_list_LPS_gsea_filt <- lapply(dds_list_LPS_Ctrl_gsea, 
+                                 function(x) lapply(x, 
+                                                    function(y) y %>% 
+                                                      as.data.frame() %>% 
+                                                      filter(padj < 0.05) ))
+# Plot spleen top pathways in Hallmark pathways
+hallmark_df <- dds_list_LPS_gsea_filt$spleen$hallmark 
+roughOrder <- unique((hallmark_df %>% arrange(NES))$pathway) 
+hallmark_df_plot <- hallmark_df %>%
+  mutate(enrichment = ifelse(NES > 0, "Up-regulated","Down-regulated"),
+         pathway = factor(pathway, levels = roughOrder))
+
+hallmark_df_plot %>% ggplot(aes(x = pathway, y = NES)) + 
+  geom_point(aes(fill = padj, size = size), color="black", 
+             stroke = 0.75, shape = 21)+
+  theme_minimal()+theme(text = element_text(color = "black"))+
+  coord_flip()+scale_fill_viridis_c(name = "P-Val", option = "B")
+
+
+
+## IDENTIFY VNS VS LPS pathways
+# Filter VNS v LPS to padj < 0.05
 ## LPS vs Ctrl (standard treatment)
-dds_list_LPS_gsea_filt <- lapply(dds_list_LPS_gsea, 
+dds_list_VNS_LPS_gsea_filt <- lapply(dds_list_VNS_LPS_gsea, 
                                  function(x) lapply(x, 
                                                     function(y) y %>% 
                                                       as.data.frame() %>% 
                                                       filter(padj < 0.05) ))
 
-## Subset to top 5 + and - enriched in Reactome
-dds_list_LPS_gsea_filt_slicedMax <- lapply(dds_list_LPS_gsea, 
-                                 function(x) lapply(x, 
-                                                    function(y) y %>% slice_max(n = 5, order_by = NES)))
-dds_list_LPS_gsea_filt_slicedMin <- lapply(dds_list_LPS_gsea, 
-                                 function(x) lapply(x, 
-                                                    function(y) y %>% slice_min(n = 5, order_by = NES)))
+# Plot spleen top pathways in multiple pathway sets
+hallmark_df <- dds_list_VNS_LPS_gsea_filt$spleen$hallmark %>% mutate(set = "hallmark") 
+gobp_df <- dds_list_VNS_LPS_gsea_filt$spleen$gobp %>% mutate(set = "gobp")
+gomf_df <- dds_list_VNS_LPS_gsea_filt$spleen$gomf %>% mutate(set = "gomf")
+immune_df <- dds_list_VNS_LPS_gsea_filt$spleen$immune %>% 
+  mutate(cells = str_extract(pathway, "(Cdc2|T Cell Cd4|T Cell Cd8|T Cell Gd|B Cell|Mast Cell|Nk Cell|Treg)")) %>%
+  mutate(set = paste("immune", "_", cells)) %>% dplyr::select(-cells)
 
-bindLists <- list(dds_list_LPS_gsea_filt_slicedMax$cortex$reactome %>% as.data.frame(),
-              dds_list_LPS_gsea_filt_slicedMin$cortex$reactome %>% as.data.frame(),
-              dds_list_LPS_gsea_filt_slicedMax$hippocampus$reactome %>% as.data.frame(),
-              dds_list_LPS_gsea_filt_slicedMin$hippocampus$reactome %>% as.data.frame(),
-              dds_list_LPS_gsea_filt_slicedMax$spleen$reactome %>% as.data.frame(),
-              dds_list_LPS_gsea_filt_slicedMin$spleen$reactome %>% as.data.frame())
 
-df_list_LPS_gsea_filt <- rbind(bindLists[[1]] %>% mutate(tissue = "cortex"),
-                               bindLists[[2]] %>% mutate(tissue = "cortex"))
-df_list_LPS_gsea_filt <- rbind(df_list_LPS_gsea_filt,
-                               bindLists[[3]] %>% mutate(tissue = "hippocampus"))
-df_list_LPS_gsea_filt <- rbind(df_list_LPS_gsea_filt,
-                               bindLists[[4]] %>% mutate(tissue = "hippocampus"))
-df_list_LPS_gsea_filt <- rbind(df_list_LPS_gsea_filt,
-                               bindLists[[5]] %>% mutate(tissue = "spleen"))
-df_list_LPS_gsea_filt <- rbind(df_list_LPS_gsea_filt,
-                               bindLists[[6]] %>% mutate(tissue = "spleen"))
+df_plot <- rbind(rbind(rbind(hallmark_df,gobp_df),gomf_df), immune_df) %>% 
+  mutate(order = paste0(set,"_",NES)) %>% arrange(order)
+roughOrder <- df_plot$pathway
 
-pathways <- unique(df_list_LPS_gsea_filt$pathway)
+df_plot <- df_plot %>%
+  mutate(enrichmentVNSLPS = ifelse(NES > 0, "Up-regulated","Down-regulated"),
+         pathway = factor(pathway, levels = roughOrder[31:1]))
 
-# Keep all pathways
-df_list_LPS_gsea_filt <- dds_list_LPS_gsea$cortex$reactome %>% filter(pathway %in% pathways) %>% 
-  mutate(tissue = "cortex")
-df_list_LPS_gsea_filt <- rbind(df_list_LPS_gsea_filt,
-                               dds_list_LPS_gsea$hippocampus$reactome %>% 
-                                 filter(pathway %in% pathways) %>% 
-                                 mutate(tissue = "hippocampus"))
-df_list_LPS_gsea_filt <- rbind(df_list_LPS_gsea_filt,
-                               dds_list_LPS_gsea$spleen$reactome %>% 
-                                 filter(pathway %in% pathways) %>% 
-                                 mutate(tissue = "spleen"))
+df_plot %>% ggplot(aes(x = pathway, y = NES)) + 
+  geom_point(aes(fill = padj, size = size), color="black", 
+             stroke = 0.75, shape = 21)+
+  theme_minimal()+theme(text = element_text(color = "black"))+
+  ylim(-2.7,3.2)+
+  coord_flip()+scale_fill_viridis_c(name = "P-Val", option = "B", limits = c(0, 0.04))
 
-## PLot
-roughOrder <- unique((df_list_LPS_gsea_filt %>% filter(tissue == "cortex") %>% arrange(NES))$pathway)
-df_list_LPS_gsea_filt_plot <- df_list_LPS_gsea_filt %>%
-  mutate(pLabel = ifelse(padj < 0.01, "**", ifelse(padj < 0.001, "**", "")),
-         labelC = ifelse(NES > 0, "black", "white"),
+# Plot spleen top pathways from VNS vs LPS to LPS vs Ctrl
+hallmark_df <- dds_list_VNS_LPS_gsea_filt$spleen$hallmark %>% mutate(set = "hallmark") 
+gobp_df <- dds_list_VNS_LPS_gsea_filt$spleen$gobp %>% mutate(set = "gobp")
+gomf_df <- dds_list_VNS_LPS_gsea_filt$spleen$gomf %>% mutate(set = "gomf")
+immune_df <- dds_list_VNS_LPS_gsea_filt$spleen$immune %>% 
+  mutate(cells = str_extract(pathway, "(Cdc2|T Cell Cd4|T Cell Cd8|T Cell Gd|B Cell|Mast Cell|Nk Cell|Treg)")) %>%
+  mutate(set = paste("immune", "_", cells)) %>% dplyr::select(-cells)
+
+df_plot <- rbind(rbind(rbind(hallmark_df,gobp_df),gomf_df), immune_df) %>% 
+  mutate(order = paste0(set,"_",NES),
+         condition="VNS_LPS") %>% arrange(order)
+roughOrder <- df_plot$pathway
+
+df_plot<- df_plot[,-8] %>% rbind(dds_list_LPS_Ctrl_gsea$spleen$hallmark %>% filter(pathway %in% hallmark_df$pathway) %>% 
+                                   mutate(set = "hallmark", condition = "LPS_Ctrl")) %>% 
+  rbind(dds_list_LPS_Ctrl_gsea$spleen$gobp %>% filter(pathway %in% gobp_df$pathway) %>% 
+                                   mutate(set = "gobp", condition = "LPS_Ctrl")) %>% 
+  rbind(dds_list_LPS_Ctrl_gsea$spleen$gomf %>% filter(pathway %in% gomf_df$pathway) %>% 
+                                   mutate(set = "gomf", condition = "LPS_Ctrl")) %>% 
+  rbind(dds_list_LPS_Ctrl_gsea$spleen$immune %>% filter(pathway %in% immune_df$pathway) %>% 
+                                   mutate(set = "immune", condition = "LPS_Ctrl")) 
+          
+df_plot <- df_plot %>% mutate(pathway = factor(pathway, levels = roughOrder[31:1]),
+                              pLabel = ifelse(padj < 0.001, "***",
+                                              ifelse(padj < 0.01, "**",
+                                                     ifelse(padj < 0.05, "*", ""))),
+                              labelC = ifelse(NES > 0, "black", "white"))
+
+# Heatmap
+df_plot %>% mutate(NES = ifelse(NES > 2.5, 2.5, ifelse(NES < -2.5, -2.5, NES))) %>%
+  ggplot(aes(x = condition, y = pathway, fill = NES)) + 
+  geom_tile(color="white")+
+  theme_classic()+theme(text = element_text(color = "black"), 
+                        axis.line = element_blank(),
+                        axis.ticks = element_blank())+
+  ylab("") + xlab("") +
+  geom_text(aes(label = pLabel), color = df_plot$labelC, size = 5, nudge_y = -0.2)+
+  scale_fill_gradient2(name = "NES", low = "blue", mid="white", midpoint=0, high="red", limits=c(-2.5,2.5))
+
+# Bar Plot
+df_plot %>% mutate(NES = ifelse(NES > 2.5, 2.5, ifelse(NES < -2.5, -2.5, NES))) %>%
+  ggplot(aes(x =pathway , y = NES, fill = condition)) + 
+  geom_col(position = "identity")+
+  theme_classic()+theme(text = element_text(color = "black"), 
+                        axis.line.y = element_blank(),
+                        axis.ticks.y = element_blank())+
+  coord_flip()+
+  scale_fill_discrete(palette = c("#EA3368","#3A7D7F",))
+
+
+
+### CX AND HIP
+# Plot hip/cx top pathways in Hallmark pathways - 
+hallmark_df_CX <- dds_list_LPS_gsea_filt$cortex$hallmark 
+hallmark_df_HIP <- dds_list_LPS_gsea_filt$hippocampus$hallmark
+
+hallmark_df_plot <- rbind(hallmark_df_CX %>% mutate(tissue = "cx"), 
+                          hallmark_df_HIP%>% mutate(tissue = "hip")) %>%
+  group_by(pathway) %>% summarize(NES = mean(NES)) %>% arrange(NES)
+roughOrder <- hallmark_df_plot$pathway
+
+hallmark_df_plot <- rbind(hallmark_df_CX %>% mutate(tissue = "cx"), 
+                          hallmark_df_HIP%>% mutate(tissue = "hip")) %>%
+  mutate(enrichment = ifelse(NES > 0, "Up-regulated","Down-regulated"),
          pathway = factor(pathway, levels = roughOrder))
 
-df_list_LPS_gsea_filt_plot %>%
-  ggplot(aes(x=pathway, y = tissue, fill = NES)) +
-  geom_tile(color = "white") +theme_classic() +
-  theme(text =  element_text(color = "black"),
-        axis.line = element_blank(), 
-        axis.ticks = element_blank())+
-  scale_y_discrete(expand = c(0,0))+
-  ylab("") + xlab("") +
-  geom_text(aes(label = pLabel), color = df_list_LPS_gsea_filt_plot$labelC, size = 4)+
-  coord_flip()+scale_fill_viridis_c(option="A")
+hallmark_df_plot %>% ggplot(aes(x = pathway, y = NES)) + 
+  geom_point(aes(fill = padj, size = size), color="black", 
+             stroke = 0.75, shape = 21)+
+  facet_wrap(vars(tissue), scales = "free_x")+
+  theme_minimal()+theme(text = element_text(color = "black"))+
+  coord_flip()+scale_fill_viridis_c(name = "P-Val", option = "B",
+                                    limits = c(0, 0.05))
 
+## IDENTIFY VNS VS LPS pathways in brain
+dds_list_VNS_LPS_gsea <- readRDS("output/251016_dds_list_VNS_LPS_gsea.RDS")
 
-## IDENTIFY VNS VS LPS pathways
+# Filter VNS v LPS to padj < 0.2
+## LPS vs Ctrl (standard treatment)
+dds_list_VNS_LPS_gsea_filt <- lapply(dds_list_VNS_LPS_gsea, 
+                                 function(x) lapply(x, 
+                                                    function(y) y %>% 
+                                                      as.data.frame() %>% 
+                                                      filter(padj < 0.2) ))
+
+# Plot hip/cx top pathways in Hallmark pathways
+brain_df_CX <- dds_list_VNS_LPS_gsea_filt$cortex$Hagenaeur_Brain %>% 
+  mutate(oldPath = pathway, pathway = str_sub(pathway, 1, 50))
+roughOrder <- (brain_df_CX %>% arrange(NES))$pathway
+
+df_plot <- brain_df_CX %>%
+  mutate(enrichment = ifelse(NES > 0, "Up-regulated","Down-regulated"),
+         pathway = factor(pathway, levels = roughOrder))
+
+df_plot %>% ggplot(aes(x = pathway, y = NES)) + 
+  geom_point(aes(fill = padj, size = size), color="black", 
+             stroke = 0.75, shape = 21)+
+  theme_minimal()+theme(text = element_text(color = "black"))+
+  coord_flip()+scale_fill_viridis_c(name = "P-Val", option = "B",
+                                    limits = c(0, 0.2))
+
+# Oligos??
+oligoGenes <- c("Mog", "Mobp", "Olig1", "Olig2", "Pdgfra")
+
 # Filter VNS v LPS to padj < 0.05
-dds_list_VNS_LPS_gsea_filt <- lapply(dds_list_VNS_LPS_gsea, function(x) lapply(x, function(y) y %>% filter(padj < 0.05)))
-df_spleen_plot_path <- dds_list_VNS_LPS_gsea_filt$spleen$immune$pathway
+## LPS vs Ctrl (standard treatment)
+dds_list_VNS_LPS_gsea_filt <- lapply(dds_list_VNS_LPS_gsea, 
+                                 function(x) lapply(x, 
+                                                    function(y) y %>% 
+                                                      as.data.frame() %>% 
+                                                      filter(padj < 0.05) ))
 
-# Get values compared to control!
-df_spleen_plot <- dds_list_LPS_gsea$spleen$immune %>% 
-  filter(pathway %in% df_spleen_plot_path) %>% 
-  mutate(treatment = "LPS")
-df_spleen_plot <- rbind(df_spleen_plot, 
-                        dds_list_VNS_LPS_gsea$spleen$immune %>%
-                          filter(pathway %in% df_spleen_plot_path) %>% 
-                          mutate(treatment = "VNS"))
+# Plot hip/cx top pathways in Hallmark pathways
+brain_df_CX <- dds_list_VNS_LPS_gsea_filt$cortex$Hagenaeur_Brain %>% 
+  mutate(oldPath = pathway, pathway = str_sub(pathway, 1, 50))
+roughOrder <- (brain_df_CX %>% arrange(NES))$pathway
 
-## PLot
-df_spleen_plot <- df_spleen_plot %>% separate_wider_delim(pathway, "Cell ", names = c("cell", "path"),
-                                                          too_few = "align_end")
-df_spleen_plot$cell[5] = "CDC1"
-df_spleen_plot$cell[6] = "M"
-df_spleen_plot$cell[28] = "CDC1"
-df_spleen_plot$cell[29] = "M"
 
-df_spleen_plot <- df_spleen_plot %>% mutate(path_all = paste(cell,path,"_"))
 
-roughOrder <- unique((df_spleen_plot %>% filter(treatment == "LPS") %>%
-  arrange(as.character(path)) %>% arrange(NES) %>% arrange(as.character(cell)))$path_all)
 
-df_spleen_plot <- df_spleen_plot %>%
-  mutate(pLabel = ifelse(padj < 0.01, "**", ifelse(padj < 0.001, "**", "*")),
-         labelC = ifelse(NES > 0, "black", "white"),
-         path_all = factor(path_all, levels = roughOrder))
+df_plot <- brain_df_CX %>% mutate(condition = "VNS_LPS") %>%
+  rbind(dds_list_LPS_Ctrl_gsea$cortex$)
+         pathway = factor(pathway, levels = roughOrder))
 
-df_spleen_plot %>%
-  mutate(NES = ifelse(NES > 3, 3, ifelse(NES < -2, -2, NES))) %>%
-  ggplot(aes(x=path_all, y = treatment, fill = NES)) +
-  geom_tile(color = "white") +theme_classic() +
-  theme(text =  element_text(color = "black"),
-        axis.line = element_blank(), 
-        axis.ticks = element_blank())+
-  scale_y_discrete(expand = c(0,0))+
+df_plot %>% ggplot(aes(x = pathway, y = NES)) + 
+  geom_point(aes(fill = padj, size = size), color="black", 
+             stroke = 0.75, shape = 21)+
+  theme_minimal()+theme(text = element_text(color = "black"))+
+  coord_flip()+scale_fill_viridis_c(name = "P-Val", option = "B",
+                                    limits = c(0, 0.2))
+
+hallmark_df <- dds_list_VNS_LPS_gsea_filt$spleen$hallmark %>% mutate(set = "hallmark") 
+gobp_df <- dds_list_VNS_LPS_gsea_filt$spleen$gobp %>% mutate(set = "gobp")
+gomf_df <- dds_list_VNS_LPS_gsea_filt$spleen$gomf %>% mutate(set = "gomf")
+immune_df <- dds_list_VNS_LPS_gsea_filt$spleen$immune %>% 
+  mutate(cells = str_extract(pathway, "(Cdc2|T Cell Cd4|T Cell Cd8|T Cell Gd|B Cell|Mast Cell|Nk Cell|Treg)")) %>%
+  mutate(set = paste("immune", "_", cells)) %>% dplyr::select(-cells)
+
+df_plot <- rbind(rbind(rbind(hallmark_df,gobp_df),gomf_df), immune_df) %>% 
+  mutate(order = paste0(set,"_",NES),
+         condition="VNS_LPS") %>% arrange(order)
+roughOrder <- df_plot$pathway
+
+df_plot<- df_plot[,-8] %>% rbind(dds_list_LPS_Ctrl_gsea$spleen$hallmark %>% filter(pathway %in% hallmark_df$pathway) %>% 
+                                   mutate(set = "hallmark", condition = "LPS_Ctrl")) %>% 
+  rbind(dds_list_LPS_Ctrl_gsea$spleen$gobp %>% filter(pathway %in% gobp_df$pathway) %>% 
+                                   mutate(set = "gobp", condition = "LPS_Ctrl")) %>% 
+  rbind(dds_list_LPS_Ctrl_gsea$spleen$gomf %>% filter(pathway %in% gomf_df$pathway) %>% 
+                                   mutate(set = "gomf", condition = "LPS_Ctrl")) %>% 
+  rbind(dds_list_LPS_Ctrl_gsea$spleen$immune %>% filter(pathway %in% immune_df$pathway) %>% 
+                                   mutate(set = "immune", condition = "LPS_Ctrl")) 
+          
+df_plot <- df_plot %>% mutate(pathway = factor(pathway, levels = roughOrder[31:1]),
+                              pLabel = ifelse(padj < 0.001, "***",
+                                              ifelse(padj < 0.01, "**",
+                                                     ifelse(padj < 0.05, "*", ""))),
+                              labelC = ifelse(NES > 0, "black", "white"))
+
+# Heatmap
+df_plot %>% mutate(NES = ifelse(NES > 2.5, 2.5, ifelse(NES < -2.5, -2.5, NES))) %>%
+  ggplot(aes(x = condition, y = pathway, fill = NES)) + 
+  geom_tile(color="white")+
+  theme_classic()+theme(text = element_text(color = "black"), 
+                        axis.line = element_blank(),
+                        axis.ticks = element_blank())+
   ylab("") + xlab("") +
-  geom_text(aes(label = pLabel), color = df_spleen_plot$labelC, size = 4)+
-  coord_flip()+scale_fill_viridis_c(option="A")
+  geom_text(aes(label = pLabel), color = df_plot$labelC, size = 5, nudge_y = -0.2)+
+  scale_fill_gradient2(name = "NES", low = "blue", mid="white", midpoint=0, high="red", limits=c(-2.5,2.5))
+
+
+
 ```
